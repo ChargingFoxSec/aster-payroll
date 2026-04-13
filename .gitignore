@@ -34,3 +34,7 @@ onchain/.yarn/
 # Local confidential-payroll demo artifacts
 onchain/.artifacts/
 onchain/.confidential-ledger/
+
+# agent
+.agents/
+skills-lock.json
