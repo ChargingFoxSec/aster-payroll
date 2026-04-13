@@ -1,0 +1,34 @@
+{
+  "name": "Aster Payroll Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/frontiers-hackathon",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "XDEBUG_MODE": "off"
+  },
+  "forwardPorts": [8000, 3306, 6379, 8899, 8900, 5173],
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client",
+        "onecentlin.laravel-blade",
+        "amiralizadeh9480.laravel-extra-intellisense",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "files.eol": "\n"
+      }
+    }
+  }
+}
