@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-04-30T10:15:00Z",
+  "execution": {
+    "execution_id": "__EXECUTION_ID__",
+    "payroll_entry_id": "__PAYROLL_ENTRY_ID__",
+    "payroll_batch_id": "__PAYROLL_BATCH_ID__"
+  },
+  "approval": {
+    "method": "local_signer",
+    "approving_wallet_address": "AdminWallet111111111111111111111111111111111",
+    "approved_at": "2026-04-30T10:15:00Z",
+    "manifest_path": "/tmp/prepared-payout.json"
+  },
+  "network": {
+    "rpc_url": "http://aster-payroll-confidential-validator:8899",
+    "token_program_id": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  },
+  "token": {
+    "mint": "DemoMint111111111111111111111111111111111111111",
+    "decimals": 2,
+    "company_token_account": "DemoCompanyToken11111111111111111111111111111111",
+    "employee_token_account": "DemoEmployeeToken1111111111111111111111111111111"
+  },
+  "payroll": {
+    "company_name": "Aster Payroll Demo Co.",
+    "employee_name": "__EMPLOYEE_NAME__",
+    "amount_minor": "__AMOUNT_MINOR__",
+    "confidential_transfer_amount": "__TRANSFER_AMOUNT__"
+  },
+  "transactions": {
+    "confidential_transfer": "__TX_SIGNATURE__"
+  }
+}

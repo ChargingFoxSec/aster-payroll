@@ -12,6 +12,11 @@ class Company extends Model
 {
     use HasFactory;
 
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class);
@@ -30,6 +35,11 @@ class Company extends Model
     public function payrollBatches(): HasMany
     {
         return $this->hasMany(PayrollBatch::class);
+    }
+
+    public function payoutExecutions(): HasMany
+    {
+        return $this->hasMany(PayoutExecution::class);
     }
 
     public function attestations(): HasMany

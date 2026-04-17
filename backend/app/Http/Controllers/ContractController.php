@@ -2,60 +2,66 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\UserFacingException;
+use App\Http\Requests\StoreEmploymentContractRequest;
 use App\Models\Employee;
 use App\Models\EmploymentContract;
-use App\Support\DemoCompany;
+use App\Services\Contracts\ContractUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class ContractController extends Controller
 {
-    public function store(Request $request, Employee $employee): RedirectResponse
-    {
-        $company = DemoCompany::resolve();
-        abort_unless($employee->company_id === $company->id, 404);
+    public function store(
+        StoreEmploymentContractRequest $request,
+        Employee $employee,
+        ContractUploadService $contractUploadService,
+    ): RedirectResponse {
+        $this->authorize('manage', $employee);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'effective_date' => ['required', 'date'],
-            'status' => ['required', Rule::in(['draft', 'active', 'superseded'])],
-            'contract_pdf' => ['required', 'file', 'mimes:pdf', 'max:15360'],
-        ]);
+        $company = $this->currentCompany($request);
+        $contractPdf = $request->file('contract_pdf');
 
-        $nextVersion = ((int) $employee->contracts()->max('version')) + 1;
-        $storedPath = $request->file('contract_pdf')->storeAs(
-            "contracts/{$company->id}/{$employee->id}",
-            sprintf('contract-v%d-%s.pdf', $nextVersion, Str::uuid()->toString()),
-            'local',
-        );
+        if (! $contractPdf instanceof UploadedFile) {
+            return redirect()
+                ->route('employees.show', $employee)
+                ->withInput()
+                ->with('error', 'Upload a PDF contract before submitting.');
+        }
 
-        $absolutePath = Storage::disk('local')->path($storedPath);
-        $fileHash = hash_file('sha256', $absolutePath);
+        try {
+            $contract = $contractUploadService->upload(
+                $company,
+                $employee,
+                $contractPdf,
+                $request->validated(),
+            );
+        } catch (UserFacingException $userFacingException) {
+            return redirect()
+                ->route('employees.show', $employee)
+                ->withInput()
+                ->with('error', $userFacingException->getMessage());
+        } catch (Throwable $throwable) {
+            report($throwable);
 
-        $employee->contracts()->create([
-            'company_id' => $company->id,
-            'version' => $nextVersion,
-            'file_path' => $storedPath,
-            'file_hash' => $fileHash,
-            'title' => $validated['title'],
-            'effective_date' => $validated['effective_date'],
-            'status' => $validated['status'],
-            'anchor_contract_pubkey' => null,
-        ]);
+            return redirect()
+                ->route('employees.show', $employee)
+                ->withInput()
+                ->with('error', 'The contract could not be stored right now. Check the application logs and try again.');
+        }
 
         return redirect()
             ->route('employees.show', $employee)
-            ->with('status', "Contract v{$nextVersion} uploaded and hashed.");
+            ->with('status', "Contract v{$contract->version} uploaded and hashed.");
     }
 
-    public function download(EmploymentContract $contract): StreamedResponse
+    public function download(Request $request, EmploymentContract $contract): StreamedResponse
     {
-        $company = DemoCompany::resolve();
-        abort_unless($contract->company_id === $company->id, 404);
+        $this->authorize('download', $contract);
 
         return Storage::disk('local')->download(
             $contract->file_path,

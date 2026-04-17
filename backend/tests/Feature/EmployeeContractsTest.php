@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Employee;
-use App\Support\DemoCompany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +13,8 @@ class EmployeeContractsTest extends TestCase
 
     public function test_admin_can_create_an_employee(): void
     {
+        $this->actingAsCompanyAdmin();
+
         $response = $this->post(route('employees.store'), [
             'full_name' => 'Mina Patel',
             'email' => 'mina@example.com',
@@ -39,16 +39,12 @@ class EmployeeContractsTest extends TestCase
     {
         Storage::fake('local');
 
-        $company = DemoCompany::resolve();
-        $employee = Employee::query()->create([
-            'company_id' => $company->id,
+        $company = $this->demoCompany();
+        $this->actingAsCompanyAdmin($company);
+        $employee = $this->createEmployeeRecord($company, [
             'full_name' => 'Rin Soto',
             'email' => 'rin@example.com',
-            'wallet_address' => null,
-            'employment_status' => 'active',
             'start_date' => '2026-04-09',
-            'pay_cycle' => 'monthly',
-            'currency' => 'USDC',
         ]);
 
         $fileContents = 'Aster Payroll employment contract v1';

@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
+use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -29,8 +31,31 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => User::ROLE_COMPANY_ADMIN,
+            'company_id' => null,
+            'employee_id' => null,
             'remember_token' => Str::random(10),
         ];
+    }
+
+    public function companyAdmin(?Company $company = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => User::ROLE_COMPANY_ADMIN,
+            'company_id' => $company?->id,
+            'employee_id' => null,
+        ]);
+    }
+
+    public function employee(Employee $employee): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => $employee->full_name,
+            'email' => $employee->email,
+            'role' => User::ROLE_EMPLOYEE,
+            'company_id' => $employee->company_id,
+            'employee_id' => $employee->id,
+        ]);
     }
 
     /**

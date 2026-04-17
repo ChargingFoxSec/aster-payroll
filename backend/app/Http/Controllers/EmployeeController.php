@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Employee;
-use App\Support\DemoCompany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class EmployeeController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $company = DemoCompany::resolve();
+        $this->authorize('viewAny', Employee::class);
+
+        $company = $this->currentCompany($request);
 
         return view('employees.index', [
             'company' => $company,
@@ -24,55 +25,55 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
+        $this->authorize('create', Employee::class);
+
         return view('employees.create', [
-            'company' => DemoCompany::resolve(),
+            'company' => $this->currentCompany($request),
             'payCycles' => $this->payCycles(),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreEmployeeRequest $request): RedirectResponse
     {
-        $company = DemoCompany::resolve();
-
-        $validated = $request->validate([
-            'full_name' => ['required', 'string', 'max:255'],
-            'email' => [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('employees', 'email')->where(
-                    fn ($query) => $query->where('company_id', $company->id),
-                ),
-            ],
-            'wallet_address' => ['nullable', 'string', 'max:64'],
-            'employment_status' => ['required', Rule::in(['active', 'paused', 'terminated'])],
-            'start_date' => ['nullable', 'date'],
-            'pay_cycle' => ['required', Rule::in(array_keys($this->payCycles()))],
-            'currency' => ['required', 'string', 'max:8'],
-        ]);
-
-        $employee = $company->employees()->create($validated);
+        $company = $this->currentCompany($request);
+        $employee = $company->employees()->create($request->validated());
 
         return redirect()
             ->route('employees.show', $employee)
             ->with('status', 'Employee created. Upload a contract PDF to complete the first payroll record.');
     }
 
-    public function show(Employee $employee): View
+    public function show(Request $request, Employee $employee): View
     {
-        $company = DemoCompany::resolve();
-        abort_unless($employee->company_id === $company->id, 404);
+        $this->authorize('view', $employee);
+
+        $company = $this->currentCompany($request);
 
         $employee->load([
             'contracts' => fn ($query) => $query->latest('version'),
+            'compensationAmendments' => fn ($query) => $query
+                ->with('contract')
+                ->orderByDesc('effective_date')
+                ->orderByDesc('id'),
+            'payrollEntries' => fn ($query) => $query
+                ->with('payrollBatch')
+                ->orderByDesc('due_date')
+                ->orderByDesc('id')
+                ->limit(5),
         ]);
+
+        $currentCompensation = $employee->compensationAmendments
+            ->first(fn ($amendment) => $amendment->effective_date->lte(now()->startOfDay()))
+            ?? $employee->compensationAmendments->first();
 
         return view('employees.show', [
             'company' => $company,
             'employee' => $employee,
             'payCycles' => $this->payCycles(),
+            'currentCompensation' => $currentCompensation,
+            'latestContract' => $employee->contracts->first(),
         ]);
     }
 

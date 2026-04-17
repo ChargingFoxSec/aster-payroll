@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'payroll_batch_id',
@@ -44,5 +45,10 @@ class PayrollEntry extends Model
     public function compensationAmendment(): BelongsTo
     {
         return $this->belongsTo(CompensationAmendment::class);
+    }
+
+    public function payoutExecution(): HasOne
+    {
+        return $this->hasOne(PayoutExecution::class);
     }
 }

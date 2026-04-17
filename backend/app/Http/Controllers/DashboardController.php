@@ -3,18 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Services\Payroll\ConfidentialPayrollService;
-use App\Support\DemoCompany;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(ConfidentialPayrollService $confidentialPayrollService): View
+    public function __invoke(Request $request, ConfidentialPayrollService $confidentialPayrollService): View
     {
-        $company = DemoCompany::resolve()->loadCount(['employees', 'contracts', 'payrollBatches']);
+        $company = $this->currentCompany($request)->loadCount(['employees', 'contracts', 'payrollBatches']);
+        $latestExecution = $confidentialPayrollService->latestExecution($company);
 
         return view('dashboard.index', [
             'company' => $company,
-            'latestReceipt' => $confidentialPayrollService->latestReceipt(),
+            'latestExecution' => $latestExecution,
+            'latestReceipt' => $confidentialPayrollService->latestReceipt($company),
         ]);
     }
 }

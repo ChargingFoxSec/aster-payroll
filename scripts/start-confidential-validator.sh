@@ -15,11 +15,9 @@ TOKEN_2022_PROGRAM_ID="${ASTER_TOKEN_2022_PROGRAM_ID:-TokenzQdBNbLqP5VEhdkAS6EPF
 AGAVE_VERSION="${ASTER_AGAVE_VERSION:-v3.1.12}"
 READINESS_RETRIES="${ASTER_CONFIDENTIAL_READINESS_RETRIES:-180}"
 READINESS_DELAY_SECONDS="${ASTER_CONFIDENTIAL_READINESS_DELAY_SECONDS:-2}"
-LEDGER_DIR="${ROOT_DIR}/onchain/.confidential-ledger"
 TOKEN_2022_PROGRAM_SO="${ASTER_TOKEN_2022_PROGRAM_SO:-${ROOT_DIR}/onchain/.artifacts/token-2022-program/spl_token_2022.so}"
 TOKEN_2022_PROGRAM_SO_IN_CONTAINER="/workspaces/frontiers-hackathon${TOKEN_2022_PROGRAM_SO#"${ROOT_DIR}"}"
-
-mkdir -p "${LEDGER_DIR}"
+LEDGER_DIR_IN_CONTAINER="${ASTER_CONFIDENTIAL_LEDGER_DIR_IN_CONTAINER:-/tmp/aster-confidential-ledger}"
 
 if [[ ! -f "${TOKEN_2022_PROGRAM_SO}" ]]; then
     "${ROOT_DIR}/scripts/build-token-2022-program.sh"
@@ -65,14 +63,14 @@ docker run \
             echo "No local validator binary found in helper image." >&2
             exit 127
         fi
-        rm -rf .confidential-ledger
-        mkdir -p .confidential-ledger
+        rm -rf "'"${LEDGER_DIR_IN_CONTAINER}"'"
+        mkdir -p "'"${LEDGER_DIR_IN_CONTAINER}"'"
         socat "TCP-LISTEN:${RPC_PROXY_PORT},fork,reuseaddr,bind=0.0.0.0" TCP:127.0.0.1:8899 &
         socat "TCP-LISTEN:${WS_PROXY_PORT},fork,reuseaddr,bind=0.0.0.0" TCP:127.0.0.1:8900 &
-        exec "${VALIDATOR_BIN}" --ledger .confidential-ledger --bpf-program '"${TOKEN_2022_PROGRAM_ID}"' '"${TOKEN_2022_PROGRAM_SO_IN_CONTAINER}"''
+        exec "${VALIDATOR_BIN}" --ledger "'"${LEDGER_DIR_IN_CONTAINER}"'" --bpf-program '"${TOKEN_2022_PROGRAM_ID}"' '"${TOKEN_2022_PROGRAM_SO_IN_CONTAINER}"''
 
 for _ in $(seq 1 "${READINESS_RETRIES}"); do
-    if docker exec "${CONTAINER_NAME}" bash -lc "curl --silent --fail --header 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getVersion\"}' 'http://127.0.0.1:${CONTAINER_RPC_PROXY_PORT}' | grep -q '\"solana-core\"'" >/dev/null 2>&1; then
+    if docker exec "${CONTAINER_NAME}" bash -lc "curl --silent --fail --header 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getVersion\"}' 'http://127.0.0.1:8899' | grep -q '\"solana-core\"'" >/dev/null 2>&1; then
         echo "Confidential validator is ready."
         echo "RPC: http://127.0.0.1:${HOST_RPC_PORT}"
         echo "WS:  ws://127.0.0.1:${HOST_WS_PORT}"

@@ -17,7 +17,7 @@ RUN apt-get update \
         libprotobuf-dev \
         jq \
         unzip \
-    && docker-php-ext-install pdo_mysql \
+    && docker-php-ext-install pdo_mysql pcntl \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && rm -rf /var/lib/apt/lists/*

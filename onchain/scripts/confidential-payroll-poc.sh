@@ -3,27 +3,78 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORK_DIR="${ASTER_CONFIDENTIAL_POC_DIR:-${ROOT_DIR}/onchain/.artifacts/confidential-payroll-poc}"
+DEFAULT_WORK_DIR="${ROOT_DIR}/onchain/.artifacts/confidential-payroll-poc"
+WORK_DIR="${ASTER_CONFIDENTIAL_POC_DIR:-${DEFAULT_WORK_DIR}}"
 LOG_DIR="${WORK_DIR}/logs"
-OUTPUT_PATH="${ASTER_CONFIDENTIAL_POC_OUTPUT:-${WORK_DIR}/receipt.json}"
 DEFAULT_RPC_URL="http://host.docker.internal:8899"
+
 if getent hosts aster-payroll-confidential-validator >/dev/null 2>&1; then
     DEFAULT_RPC_URL="http://aster-payroll-confidential-validator:8899"
 fi
+
 RPC_URL="${ASTER_SOLANA_RPC_URL:-${RPC_URL:-${DEFAULT_RPC_URL}}}"
 TOKEN_PROGRAM_ID="${ASTER_TOKEN_2022_PROGRAM_ID:-TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb}"
-MINT_DECIMALS="${ASTER_CONFIDENTIAL_MINT_DECIMALS:-2}"
-MINT_AMOUNT="${ASTER_CONFIDENTIAL_MINT_AMOUNT:-1000}"
-TRANSFER_AMOUNT="${ASTER_CONFIDENTIAL_TRANSFER_AMOUNT:-250}"
-PAYER_KEYPAIR="${WORK_DIR}/payer.json"
+MANIFEST_PATH="${ASTER_PAYOUT_MANIFEST:-}"
+COMPANY_OWNER_KEYPAIR="${ASTER_COMPANY_OWNER_KEYPAIR:-}"
+EMPLOYEE_OWNER_KEYPAIR="${ASTER_EMPLOYEE_OWNER_KEYPAIR:-${WORK_DIR}/employee-owner.json}"
+PAYER_KEYPAIR="${ASTER_PAYOUT_FEE_PAYER_KEYPAIR:-${WORK_DIR}/payer.json}"
 PAYER_CONFIG="${WORK_DIR}/payer-config.yml"
-COMPANY_OWNER_KEYPAIR="${WORK_DIR}/company-owner.json"
 COMPANY_OWNER_CONFIG="${WORK_DIR}/company-owner-config.yml"
-EMPLOYEE_OWNER_KEYPAIR="${WORK_DIR}/employee-owner.json"
 EMPLOYEE_OWNER_CONFIG="${WORK_DIR}/employee-owner-config.yml"
 
-umask 077
-mkdir -p "${LOG_DIR}"
+usage() {
+    cat <<'EOF'
+Usage:
+  ASTER_PAYOUT_MANIFEST=/abs/path/to/execution.json \
+  ASTER_COMPANY_OWNER_KEYPAIR=/abs/path/to/admin-company-wallet.json \
+  ./onchain/scripts/confidential-payroll-poc.sh
+
+Optional environment variables:
+  ASTER_SOLANA_RPC_URL
+  ASTER_CONFIDENTIAL_POC_DIR
+  ASTER_CONFIDENTIAL_POC_OUTPUT
+  ASTER_EMPLOYEE_OWNER_KEYPAIR
+  ASTER_PAYOUT_FEE_PAYER_KEYPAIR
+  ASTER_CONFIDENTIAL_MINT_AMOUNT
+EOF
+}
+
+while (($# > 0)); do
+    case "$1" in
+        --manifest)
+            MANIFEST_PATH="$2"
+            shift 2
+            ;;
+        --company-owner-keypair)
+            COMPANY_OWNER_KEYPAIR="$2"
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "${MANIFEST_PATH}" || -z "${COMPANY_OWNER_KEYPAIR}" ]]; then
+    usage >&2
+    exit 1
+fi
+
+if [[ ! -f "${MANIFEST_PATH}" ]]; then
+    echo "Prepared payout manifest not found: ${MANIFEST_PATH}" >&2
+    exit 1
+fi
+
+if [[ ! -f "${COMPANY_OWNER_KEYPAIR}" ]]; then
+    echo "Admin-controlled company signer keypair not found: ${COMPANY_OWNER_KEYPAIR}" >&2
+    exit 1
+fi
 
 require_binary() {
     local name="$1"
@@ -38,34 +89,6 @@ require_binary jq
 require_binary solana
 require_binary solana-keygen
 require_binary spl-token
-
-generate_keypair() {
-    local path="$1"
-
-    if [[ ! -f "${path}" ]]; then
-        solana-keygen new --silent --no-bip39-passphrase --force -o "${path}" >/dev/null
-    fi
-}
-
-write_config() {
-    local config_path="$1"
-    local keypair_path="$2"
-
-    solana config set \
-        --config "${config_path}" \
-        --url "${RPC_URL}" \
-        --keypair "${keypair_path}" \
-        >/dev/null
-}
-
-run_step() {
-    local name="$1"
-    shift
-
-    local log_path="${LOG_DIR}/${name}.json"
-    "$@" --output json-compact >"${log_path}"
-    cat "${log_path}"
-}
 
 json_value() {
     local path="$1"
@@ -100,8 +123,52 @@ extract_address() {
     grep -Eo '[1-9A-HJ-NP-Za-km-z]{32,44}' "${path}" | head -n 1 || true
 }
 
+generate_keypair() {
+    local path="$1"
+
+    if [[ ! -f "${path}" ]]; then
+        solana-keygen new --silent --no-bip39-passphrase --force -o "${path}" >/dev/null
+    fi
+}
+
+write_config() {
+    local config_path="$1"
+    local keypair_path="$2"
+
+    solana config set \
+        --config "${config_path}" \
+        --url "${RPC_URL}" \
+        --keypair "${keypair_path}" \
+        >/dev/null
+}
+
+run_step() {
+    local name="$1"
+    shift
+
+    local log_path="${LOG_DIR}/${name}.json"
+    "$@" --output json-compact >"${log_path}"
+    cat "${log_path}"
+}
+
+MANIFEST_DIR="$(dirname "${MANIFEST_PATH}")"
+OUTPUT_PATH="${ASTER_CONFIDENTIAL_POC_OUTPUT:-${MANIFEST_DIR}/receipt.json}"
+MINT_DECIMALS="$(jq -er '.payroll.mint_decimals // 2' "${MANIFEST_PATH}")"
+AMOUNT_MINOR="$(jq -er '.payroll.amount_minor' "${MANIFEST_PATH}")"
+TRANSFER_AMOUNT="$(jq -er '.payroll.confidential_transfer_amount' "${MANIFEST_PATH}")"
+EXECUTION_ID="$(jq -er '.execution.execution_id' "${MANIFEST_PATH}")"
+PAYROLL_ENTRY_ID="$(jq -er '.execution.payroll_entry_id' "${MANIFEST_PATH}")"
+PAYROLL_BATCH_ID="$(jq -er '.execution.payroll_batch_id' "${MANIFEST_PATH}")"
+COMPANY_EXPECTED_WALLET="$(jq -r '.company.wallet_address // empty' "${MANIFEST_PATH}")"
+COMPANY_NAME="$(jq -r '.company.name // "Aster Payroll Demo Co."' "${MANIFEST_PATH}")"
+EMPLOYEE_NAME="$(jq -r '.employee.full_name // "Demo Employee"' "${MANIFEST_PATH}")"
+
+MINT_AMOUNT="${ASTER_CONFIDENTIAL_MINT_AMOUNT:-$(jq -er '(.payroll.confidential_transfer_amount * 4) | floor' "${MANIFEST_PATH}")}"
+
+umask 077
+mkdir -p "${LOG_DIR}"
+
 generate_keypair "${PAYER_KEYPAIR}"
-generate_keypair "${COMPANY_OWNER_KEYPAIR}"
 generate_keypair "${EMPLOYEE_OWNER_KEYPAIR}"
 
 write_config "${PAYER_CONFIG}" "${PAYER_KEYPAIR}"
@@ -111,6 +178,11 @@ write_config "${EMPLOYEE_OWNER_CONFIG}" "${EMPLOYEE_OWNER_KEYPAIR}"
 PAYER_PUBKEY="$(solana address -k "${PAYER_KEYPAIR}")"
 COMPANY_OWNER_PUBKEY="$(solana address -k "${COMPANY_OWNER_KEYPAIR}")"
 EMPLOYEE_OWNER_PUBKEY="$(solana address -k "${EMPLOYEE_OWNER_KEYPAIR}")"
+
+if [[ -n "${COMPANY_EXPECTED_WALLET}" && "${COMPANY_EXPECTED_WALLET}" != "${COMPANY_OWNER_PUBKEY}" ]]; then
+    echo "Manifest expects company wallet ${COMPANY_EXPECTED_WALLET}, but provided signer resolves to ${COMPANY_OWNER_PUBKEY}." >&2
+    exit 1
+fi
 
 solana --url "${RPC_URL}" airdrop 100 "${PAYER_PUBKEY}" >/dev/null
 solana --url "${RPC_URL}" balance "${PAYER_PUBKEY}" >/dev/null
@@ -244,22 +316,23 @@ run_step apply_employee_pending_balance \
 
 COMPANY_PUBLIC_BALANCE="$(spl-token --config "${COMPANY_OWNER_CONFIG}" --program-2022 balance "${MINT_ADDRESS}")"
 EMPLOYEE_PUBLIC_BALANCE="$(spl-token --config "${EMPLOYEE_OWNER_CONFIG}" --program-2022 balance "${MINT_ADDRESS}")"
+APPROVED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 jq -n \
-    --arg generated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    --arg generated_at "${APPROVED_AT}" \
     --arg rpc_url "${RPC_URL}" \
     --arg token_program_id "${TOKEN_PROGRAM_ID}" \
+    --arg manifest_path "${MANIFEST_PATH}" \
     --arg payer "${PAYER_PUBKEY}" \
     --arg company_owner "${COMPANY_OWNER_PUBKEY}" \
     --arg employee_owner "${EMPLOYEE_OWNER_PUBKEY}" \
+    --arg company_name "${COMPANY_NAME}" \
+    --arg employee_name "${EMPLOYEE_NAME}" \
     --arg mint "${MINT_ADDRESS}" \
     --arg company_token_account "${COMPANY_TOKEN_ACCOUNT}" \
     --arg employee_token_account "${EMPLOYEE_TOKEN_ACCOUNT}" \
     --arg company_public_balance "${COMPANY_PUBLIC_BALANCE}" \
     --arg employee_public_balance "${EMPLOYEE_PUBLIC_BALANCE}" \
-    --argjson mint_decimals "${MINT_DECIMALS}" \
-    --argjson mint_amount "${MINT_AMOUNT}" \
-    --argjson transfer_amount "${TRANSFER_AMOUNT}" \
     --arg create_mint_signature "$(extract_signature "${LOG_DIR}/create_mint.json")" \
     --arg create_company_account_signature "$(extract_signature "${LOG_DIR}/create_company_account.json")" \
     --arg create_employee_account_signature "$(extract_signature "${LOG_DIR}/create_employee_account.json")" \
@@ -272,11 +345,28 @@ jq -n \
     --arg apply_employee_signature "$(extract_signature "${LOG_DIR}/apply_employee_pending_balance.json")" \
     --arg work_dir "${WORK_DIR}" \
     --arg raw_logs_dir "${LOG_DIR}" \
+    --argjson execution_id "${EXECUTION_ID}" \
+    --argjson payroll_entry_id "${PAYROLL_ENTRY_ID}" \
+    --argjson payroll_batch_id "${PAYROLL_BATCH_ID}" \
+    --argjson mint_decimals "${MINT_DECIMALS}" \
+    --argjson transfer_amount "${TRANSFER_AMOUNT}" \
+    --argjson amount_minor "${AMOUNT_MINOR}" \
     '{
         generated_at: $generated_at,
+        execution: {
+            execution_id: $execution_id,
+            payroll_entry_id: $payroll_entry_id,
+            payroll_batch_id: $payroll_batch_id
+        },
         network: {
             rpc_url: $rpc_url,
             token_program_id: $token_program_id
+        },
+        approval: {
+            method: "local_signer",
+            approving_wallet_address: $company_owner,
+            approved_at: $generated_at,
+            manifest_path: $manifest_path
         },
         actors: {
             payer: $payer,
@@ -290,7 +380,9 @@ jq -n \
             employee_token_account: $employee_token_account
         },
         payroll: {
-            minted_amount: $mint_amount,
+            company_name: $company_name,
+            employee_name: $employee_name,
+            amount_minor: $amount_minor,
             confidential_transfer_amount: $transfer_amount
         },
         transactions: {

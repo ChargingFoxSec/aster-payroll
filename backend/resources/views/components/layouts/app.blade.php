@@ -26,11 +26,36 @@
                         </p>
                     </div>
 
-                    <nav class="flex flex-wrap gap-3 text-sm">
-                        <a href="{{ route('dashboard') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Dashboard</a>
-                        <a href="{{ route('employees.index') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Employees</a>
-                        <a href="{{ route('payroll-demo.show') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Confidential Payroll Demo</a>
-                    </nav>
+                    <div class="flex flex-wrap items-center gap-3 text-sm">
+                        @auth
+                            @if (auth()->user()->isCompanyAdmin())
+                                <nav class="flex flex-wrap gap-3">
+                                    <a href="{{ route('dashboard') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Dashboard</a>
+                                    <a href="{{ route('employees.index') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Employees</a>
+                                    <a href="{{ route('payroll-batches.index') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Payroll</a>
+                                    <a href="{{ route('payroll-demo.show') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Confidential Payroll Demo</a>
+                                </nav>
+                            @else
+                                <nav class="flex flex-wrap gap-3">
+                                    <a href="{{ route('portal.show') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">My Portal</a>
+                                    <a href="{{ route('portal.payroll') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">My Payroll</a>
+                                </nav>
+                            @endif
+
+                            <div class="rounded-full border border-white/10 bg-stone-950/70 px-4 py-2 text-xs uppercase tracking-[0.25em] text-stone-300">
+                                {{ auth()->user()->isCompanyAdmin() ? 'Company Admin' : 'Employee' }}
+                            </div>
+
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-rose-300/60 hover:text-rose-100">
+                                    Log out
+                                </button>
+                            </form>
+                        @else
+                            <a href="{{ route('login') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Log in</a>
+                        @endauth
+                    </div>
                 </div>
             </header>
 

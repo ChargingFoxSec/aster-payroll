@@ -27,6 +27,9 @@
                 <a href="{{ route('employees.create') }}" class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-medium text-stone-950 transition hover:bg-cyan-200">
                     Create employee
                 </a>
+                <a href="{{ route('payroll-batches.index') }}" class="rounded-full border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:border-cyan-300/60 hover:text-cyan-100">
+                    Review payroll ledger
+                </a>
                 <a href="{{ route('payroll-demo.show') }}" class="rounded-full border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:border-cyan-300/60 hover:text-cyan-100">
                     Open confidential payroll demo
                 </a>
@@ -34,27 +37,36 @@
         </div>
 
         <div class="rounded-3xl border border-white/10 bg-stone-900/70 p-6">
-            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Latest Receipt</p>
+            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Latest Payout State</p>
 
-            @if ($latestReceipt)
+            @if ($latestExecution)
                 <div class="mt-4 space-y-4">
                     <div>
-                        <p class="text-sm text-stone-400">Mint</p>
-                        <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $latestReceipt['token']['mint'] ?? 'n/a' }}</p>
+                        <p class="text-sm text-stone-400">Execution</p>
+                        <p class="mt-1 text-sm text-stone-100">#{{ $latestExecution->id }} · {{ str($latestExecution->status)->replace('_', ' ')->title() }}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-stone-400">Tracked confidential transfer</p>
-                        <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $latestReceipt['transactions']['confidential_transfer'] ?? 'n/a' }}</p>
+                        <p class="text-sm text-stone-400">Employee</p>
+                        <p class="mt-1 text-sm text-stone-100">{{ $latestExecution->employee->full_name }}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-stone-400">Generated</p>
-                        <p class="mt-1 text-sm text-stone-200">{{ $latestReceipt['generated_at'] ?? 'n/a' }}</p>
+                        <p class="text-sm text-stone-400">Approval actor</p>
+                        <p class="mt-1 break-all font-mono text-xs {{ $latestExecution->approved_wallet_address ? 'text-cyan-100' : 'text-stone-400' }}">
+                            {{ $latestExecution->approved_wallet_address ?: ($company->wallet_address ?: 'Captured at receipt import time') }}
+                        </p>
                     </div>
+
+                    @if ($latestReceipt)
+                        <div>
+                            <p class="text-sm text-stone-400">Tracked confidential transfer</p>
+                            <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $latestReceipt['transactions']['confidential_transfer'] ?? 'n/a' }}</p>
+                        </div>
+                    @endif
                 </div>
             @else
                 <p class="mt-4 text-sm leading-6 text-stone-300">
-                    No confidential payroll receipt yet. Start the native validator helper, then run the demo once to
-                    capture a real local Token-2022 confidential transfer trail.
+                    No payout execution has been prepared yet. Open the confidential payroll demo to generate a
+                    prepared manifest, run the signer locally, and then import the receipt back into Laravel.
                 </p>
             @endif
         </div>
