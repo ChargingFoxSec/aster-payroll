@@ -3,78 +3,141 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ $title ?? 'Aster Payroll' }}</title>
+        <title>{{ $title ?? __('ui.app_name') }}</title>
         @if (! app()->runningUnitTests() || file_exists(public_path('build/manifest.json')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])
         @endif
     </head>
-    <body class="min-h-screen bg-stone-950 text-stone-100">
-        <div class="absolute inset-0 -z-10 overflow-hidden">
-            <div class="absolute left-0 top-0 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl"></div>
-            <div class="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-amber-400/10 blur-3xl"></div>
-            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_40%),linear-gradient(135deg,_rgba(255,255,255,0.02),_transparent_50%)]"></div>
-        </div>
+    @php
+        $user = auth()->user();
+        $navItems = [];
 
-        <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-6 lg:px-10">
-            <header class="mb-8 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/80">Private, Verifiable Payroll</p>
-                        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">Aster Payroll</h1>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-stone-300">
-                            Hackathon MVP focused on contract hashing, employee records, and confidential payroll receipts.
-                        </p>
-                    </div>
+        if ($user?->isCompanyAdmin()) {
+            $navItems = [
+                ['label' => __('ui.nav.dashboard'), 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard')],
+                ['label' => __('ui.nav.employees'), 'href' => route('employees.index'), 'active' => request()->routeIs('employees.*', 'contracts.*')],
+                ['label' => __('ui.nav.payroll'), 'href' => route('payroll-batches.index'), 'active' => request()->routeIs('payroll-batches.*')],
+                ['label' => __('ui.nav.execution_lab'), 'href' => route('payroll-demo.show'), 'active' => request()->routeIs('payroll-demo.*')],
+            ];
+        } elseif ($user?->isEmployee()) {
+            $navItems = [
+                ['label' => __('ui.nav.my_portal'), 'href' => route('portal.show'), 'active' => request()->routeIs('portal.show')],
+                ['label' => __('ui.nav.my_payroll'), 'href' => route('portal.payroll'), 'active' => request()->routeIs('portal.payroll')],
+            ];
+        }
 
-                    <div class="flex flex-wrap items-center gap-3 text-sm">
-                        @auth
-                            @if (auth()->user()->isCompanyAdmin())
-                                <nav class="flex flex-wrap gap-3">
-                                    <a href="{{ route('dashboard') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Dashboard</a>
-                                    <a href="{{ route('employees.index') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Employees</a>
-                                    <a href="{{ route('payroll-batches.index') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Payroll</a>
-                                    <a href="{{ route('payroll-demo.show') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Confidential Payroll Demo</a>
-                                </nav>
-                            @else
-                                <nav class="flex flex-wrap gap-3">
-                                    <a href="{{ route('portal.show') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">My Portal</a>
-                                    <a href="{{ route('portal.payroll') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">My Payroll</a>
-                                </nav>
-                            @endif
+        $activeNav = collect($navItems)->firstWhere('active', true);
+        $supportedLocales = config('app.supported_locales', []);
+        $currentLocale = app()->getLocale();
+    @endphp
 
-                            <div class="rounded-full border border-white/10 bg-stone-950/70 px-4 py-2 text-xs uppercase tracking-[0.25em] text-stone-300">
-                                {{ auth()->user()->isCompanyAdmin() ? 'Company Admin' : 'Employee' }}
-                            </div>
+    <body class="app-theme min-h-screen">
+        <div class="app-shell mx-auto flex min-h-screen w-full max-w-[96rem] flex-col px-4 py-4 lg:px-6">
+            <header class="app-header mb-8 px-4 py-3 lg:px-5">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <a href="{{ route('home') }}" class="flex items-center gap-4">
+                        <span class="brand-mark" aria-hidden="true"></span>
+                        <span class="brand-wordmark">{{ __('ui.app_name') }}</span>
+                    </a>
 
-                            <form method="POST" action="{{ route('logout') }}">
+                    <div class="command-deck lg:items-end">
+                        <div class="control-row">
+                            @auth
+                                <div class="nav-shell">
+                                    @foreach ($navItems as $item)
+                                        <a
+                                            href="{{ $item['href'] }}"
+                                            @class([
+                                                'nav-link',
+                                                'nav-link-active' => $item['active'],
+                                            ])
+                                            @if ($item['active']) aria-current="page" @endif
+                                        >
+                                            {{ $item['label'] }}
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endauth
+
+                            <form method="POST" action="{{ route('locale.update') }}" class="language-switcher">
                                 @csrf
-                                <button type="submit" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-rose-300/60 hover:text-rose-100">
-                                    Log out
-                                </button>
+                                <label>
+                                    <span class="language-switcher-label">{{ __('ui.layout.language') }}</span>
+                                    <select name="locale" class="language-switcher-select" onchange="this.form.submit()">
+                                        @foreach ($supportedLocales as $locale => $label)
+                                            <option value="{{ $locale }}" @selected($currentLocale === $locale)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
                             </form>
-                        @else
-                            <a href="{{ route('login') }}" class="rounded-full border border-white/10 px-4 py-2 text-stone-200 transition hover:border-cyan-300/60 hover:text-cyan-100">Log in</a>
+
+                            @auth
+                                <div class="identity-chip">
+                                    <span class="identity-chip-label">{{ __('ui.layout.access') }}</span>
+                                    <span class="identity-chip-value">{{ $user->isCompanyAdmin() ? __('ui.roles.company_admin') : __('ui.roles.employee') }}</span>
+                                </div>
+
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="app-button app-button-ghost">
+                                        {{ __('ui.actions.log_out') }}
+                                    </button>
+                                </form>
+                            @endauth
+                        </div>
+
+                        @auth
+                            @if ($activeNav)
+                                <p class="nav-context">{{ __('ui.layout.current_view') }} · {{ $activeNav['label'] }}</p>
+                            @endif
                         @endauth
                     </div>
                 </div>
             </header>
 
+            <section class="mb-10 max-w-3xl">
+                <p class="brand-kicker">{{ __('ui.layout.hero_kicker') }}</p>
+                <h1 class="brand-title mt-5">{{ __('ui.app_name') }}</h1>
+                <p class="brand-copy mt-5">
+                    {{ __('ui.layout.hero_copy') }}
+                </p>
+            </section>
+
             @if (session('status'))
-                <div class="mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+                <div class="flash-banner flash-banner-success mb-6 px-4 py-3 text-sm">
                     {{ session('status') }}
                 </div>
             @endif
 
             @if (session('error'))
-                <div class="mb-6 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                <div class="flash-banner flash-banner-error mb-6 px-4 py-3 text-sm">
                     {{ session('error') }}
                 </div>
             @endif
 
+            @if ($provisionedPortalAccount = session('provisioned_portal_account'))
+                <div class="flash-banner flash-banner-warning mb-6 px-4 py-4 text-sm">
+                    <p class="font-medium">{{ __('ui.layout.temporary_credentials') }}</p>
+                    <p class="mt-2">
+                        {{ __('ui.layout.temporary_credentials_copy', ['employee' => $provisionedPortalAccount['employee_name'] ?? __('ui.roles.employee')]) }}
+                    </p>
+                    <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <div class="panel-inset p-3">
+                            <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.fields.email') }}</p>
+                            <p class="mt-2 break-all font-mono text-xs text-stone-100">{{ $provisionedPortalAccount['email'] ?? __('ui.common.unavailable') }}</p>
+                        </div>
+                        <div class="panel-inset p-3">
+                            <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.fields.temporary_password') }}</p>
+                            <p class="mt-2 break-all font-mono text-xs text-stone-100">{{ $provisionedPortalAccount['temporary_password'] ?? __('ui.common.unavailable') }}</p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             @if ($errors->any())
-                <div class="mb-6 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-50">
-                    <p class="font-medium">Please fix the highlighted form data.</p>
-                    <ul class="mt-2 space-y-1 text-amber-100/90">
+                <div class="flash-banner flash-banner-warning mb-6 px-4 py-3 text-sm">
+                    <p class="font-medium">{{ __('ui.layout.form_errors') }}</p>
+                    <ul class="mt-2 space-y-1">
                         @foreach ($errors->all() as $error)
                             <li>{{ $error }}</li>
                         @endforeach

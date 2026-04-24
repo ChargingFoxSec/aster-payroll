@@ -28,4 +28,3 @@ fi
 
 echo ""
 echo "MySQL: mysql -h mysql -uaster -paster aster_payroll"
-echo "Redis: redis-cli -h redis"

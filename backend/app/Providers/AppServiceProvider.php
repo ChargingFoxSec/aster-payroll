@@ -10,6 +10,8 @@ use App\Policies\EmployeePolicy;
 use App\Policies\EmploymentContractPolicy;
 use App\Policies\PayoutExecutionPolicy;
 use App\Policies\PayrollBatchPolicy;
+use App\Services\Solana\PayrollAnchorClient;
+use App\Services\Solana\ProcessPayrollAnchorClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -23,7 +25,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(PayrollAnchorClient::class, ProcessPayrollAnchorClient::class);
     }
 
     /**

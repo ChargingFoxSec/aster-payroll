@@ -5,11 +5,25 @@ namespace Tests;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\Solana\PayrollAnchorClient;
 use App\Support\DemoCompany;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Tests\Fakes\FakePayrollAnchorClient;
+use Tests\Fakes\ThrowingPayrollAnchorClient;
+use Throwable;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected FakePayrollAnchorClient $fakePayrollAnchorClient;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->fakePayrollAnchorClient = new FakePayrollAnchorClient();
+        $this->app->instance(PayrollAnchorClient::class, $this->fakePayrollAnchorClient);
+    }
+
     protected function demoCompany(): Company
     {
         return DemoCompany::resolve();
@@ -63,5 +77,15 @@ abstract class TestCase extends BaseTestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    protected function payrollAnchorClient(): FakePayrollAnchorClient
+    {
+        return $this->fakePayrollAnchorClient;
+    }
+
+    protected function bindThrowingPayrollAnchorClient(Throwable $throwable): void
+    {
+        $this->app->instance(PayrollAnchorClient::class, new ThrowingPayrollAnchorClient($throwable));
     }
 }

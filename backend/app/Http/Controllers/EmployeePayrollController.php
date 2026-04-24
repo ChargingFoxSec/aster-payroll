@@ -25,8 +25,8 @@ class EmployeePayrollController extends Controller
             'company' => $company,
             'employee' => $employee,
             'backUrl' => route('employees.show', $employee),
-            'backLabel' => 'Back to employee',
-            'scopeLabel' => 'Employee Scope',
+            'backLabel' => __('ui.actions.back_to_employee'),
+            'scopeLabel' => __('ui.pages.employees.detail_kicker'),
         ]);
     }
 }

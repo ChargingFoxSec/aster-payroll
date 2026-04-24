@@ -10,7 +10,12 @@ class DashboardController extends Controller
 {
     public function __invoke(Request $request, ConfidentialPayrollService $confidentialPayrollService): View
     {
-        $company = $this->currentCompany($request)->loadCount(['employees', 'contracts', 'payrollBatches']);
+        $company = $this->currentCompany($request)->loadCount([
+            'employees',
+            'contracts',
+            'payrollBatches',
+            'employees as active_employees_count' => fn ($query) => $query->where('employment_status', 'active'),
+        ]);
         $latestExecution = $confidentialPayrollService->latestExecution($company);
 
         return view('dashboard.index', [

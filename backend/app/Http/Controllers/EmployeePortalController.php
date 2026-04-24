@@ -16,10 +16,6 @@ class EmployeePortalController extends Controller
 
         $employee->load([
             'contracts' => fn ($query) => $query->latest('version'),
-            'compensationAmendments' => fn ($query) => $query
-                ->orderByDesc('effective_date')
-                ->orderByDesc('id')
-                ->limit(1),
             'payrollEntries' => fn ($query) => $query
                 ->with('payrollBatch')
                 ->orderByDesc('due_date')
@@ -27,7 +23,7 @@ class EmployeePortalController extends Controller
                 ->limit(5),
         ]);
 
-        $currentCompensation = $employee->compensationAmendments->first();
+        $currentCompensation = $employee->currentCompensation();
 
         return view('portal.show', [
             'company' => $company,
@@ -35,9 +31,9 @@ class EmployeePortalController extends Controller
             'currentCompensation' => $currentCompensation,
             'latestContract' => $employee->contracts->first(),
             'payCycles' => [
-                'monthly' => 'Monthly',
-                'semi_monthly' => 'Semi-monthly',
-                'bi_weekly' => 'Bi-weekly',
+                'monthly' => __('ui.pay_cycles.monthly'),
+                'semi_monthly' => __('ui.pay_cycles.semi_monthly'),
+                'bi_weekly' => __('ui.pay_cycles.bi_weekly'),
             ],
         ]);
     }
@@ -60,8 +56,8 @@ class EmployeePortalController extends Controller
             'company' => $company,
             'employee' => $employee,
             'backUrl' => route('portal.show'),
-            'backLabel' => 'Back to portal',
-            'scopeLabel' => 'Self Service',
+            'backLabel' => __('ui.actions.back_to_portal'),
+            'scopeLabel' => __('ui.pages.portal.self_service_short'),
         ]);
     }
 }

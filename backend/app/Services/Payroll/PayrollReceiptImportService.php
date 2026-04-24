@@ -16,6 +16,10 @@ use InvalidArgumentException;
 
 class PayrollReceiptImportService
 {
+    public function __construct(
+        private readonly PayrollStatusService $payrollStatusService,
+    ) {}
+
     public function importForExecution(
         PayoutExecution $execution,
         array $receipt,
@@ -24,7 +28,7 @@ class PayrollReceiptImportService
         $execution->loadMissing(['company', 'employee', 'payrollEntry.payrollBatch']);
 
         if ($execution->isImported()) {
-            throw new UserFacingException('This payout execution has already been imported.');
+            throw new UserFacingException(__('ui.messages.payout_execution_already_imported'));
         }
 
         $txSignature = trim((string) data_get($receipt, 'transactions.confidential_transfer', ''));
@@ -40,23 +44,23 @@ class PayrollReceiptImportService
         );
 
         if ($txSignature === '') {
-            throw new UserFacingException('Receipt does not contain a confidential transfer signature.');
+            throw new UserFacingException(__('ui.messages.receipt_missing_confidential_transfer_signature'));
         }
 
         if ($approvedWalletAddress === '') {
-            throw new UserFacingException('Receipt does not contain the approving wallet address.');
+            throw new UserFacingException(__('ui.messages.receipt_missing_approving_wallet'));
         }
 
         if (($receiptExecutionId = data_get($receipt, 'execution.execution_id')) !== null && (int) $receiptExecutionId !== $execution->id) {
-            throw new UserFacingException('Receipt execution id does not match the prepared payout.');
+            throw new UserFacingException(__('ui.messages.receipt_execution_id_mismatch'));
         }
 
         if (($receiptPayrollEntryId = data_get($receipt, 'execution.payroll_entry_id')) !== null && (int) $receiptPayrollEntryId !== $execution->payroll_entry_id) {
-            throw new UserFacingException('Receipt payroll entry id does not match the prepared payout.');
+            throw new UserFacingException(__('ui.messages.receipt_payroll_entry_id_mismatch'));
         }
 
         if ($amountMinor !== $execution->payrollEntry->amount_minor) {
-            throw new UserFacingException('Receipt amount does not match the prepared payroll entry.');
+            throw new UserFacingException(__('ui.messages.receipt_amount_mismatch'));
         }
 
         if (
@@ -64,7 +68,7 @@ class PayrollReceiptImportService
             && $execution->company->wallet_address !== ''
             && $execution->company->wallet_address !== $approvedWalletAddress
         ) {
-            throw new UserFacingException('Receipt signer does not match the configured company wallet address.');
+            throw new UserFacingException(__('ui.messages.receipt_signer_mismatch'));
         }
 
         return DB::transaction(function () use (
@@ -80,7 +84,7 @@ class PayrollReceiptImportService
                 ->findOrFail($execution->payroll_entry_id);
 
             if ($entry->tx_signature !== null || $entry->paid_at !== null) {
-                throw new UserFacingException('This payroll entry already has an imported payout receipt.');
+                throw new UserFacingException(__('ui.messages.payroll_entry_has_imported_receipt'));
             }
 
             $entry->fill([
@@ -90,11 +94,11 @@ class PayrollReceiptImportService
             ])->save();
 
             $batch = PayrollBatch::query()->lockForUpdate()->findOrFail($entry->payroll_batch_id);
-            $batch->forceFill([
-                'total_amount_minor' => (int) $batch->entries()->sum('amount_minor'),
-                'status' => $this->resolveBatchStatus($batch),
-                'executed_at' => $generatedAt,
-            ])->save();
+            $this->payrollStatusService->syncLoadedBatch(
+                $batch,
+                $batch->entries()->orderBy('id')->get(),
+                $generatedAt,
+            );
 
             $execution->forceFill([
                 'status' => PayoutExecution::STATUS_IMPORTED,
@@ -126,6 +130,12 @@ class PayrollReceiptImportService
             ?? data_get($receipt, 'actors.company_owner');
         $dueDate = $this->normalizeDate($dueDate);
         $generatedAt = $this->normalizeDateTime(data_get($receipt, 'generated_at'));
+        $supportedCurrency = $this->supportedCurrency();
+
+        $this->assertSupportedCurrency(
+            $employee->currency,
+            __('ui.messages.employee_currency_unsupported_for_receipt_import', ['currency' => $supportedCurrency]),
+        );
 
         return DB::transaction(function () use (
             $company,
@@ -135,8 +145,16 @@ class PayrollReceiptImportService
             $generatedAt,
             $txSignature,
             $approvedWalletAddress,
+            $supportedCurrency,
         ): PayrollEntry {
-            $amendment = $this->resolveEffectiveCompensation($employee, $dueDate);
+            $amendment = $employee->effectiveCompensationAt($dueDate);
+
+            if ($amendment !== null) {
+                $this->assertSupportedCurrency(
+                    $amendment->currency,
+                    __('ui.messages.compensation_currency_unsupported_for_receipt_import', ['currency' => $supportedCurrency]),
+                );
+            }
 
             $batch = PayrollBatch::query()->updateOrCreate(
                 [
@@ -145,9 +163,8 @@ class PayrollReceiptImportService
                     'period_month' => $dueDate->month,
                 ],
                 [
-                    'currency' => $employee->currency,
+                    'currency' => $supportedCurrency,
                     'due_date' => $dueDate->toDateString(),
-                    'executed_at' => $generatedAt,
                 ],
             );
 
@@ -160,7 +177,7 @@ class PayrollReceiptImportService
 
             $entry->fill([
                 'amount_minor' => $amountMinor,
-                'currency' => $employee->currency,
+                'currency' => $supportedCurrency,
                 'status' => $txSignature ? 'paid' : 'pending',
                 'due_date' => $dueDate->toDateString(),
                 'paid_at' => $txSignature ? $generatedAt : null,
@@ -173,11 +190,11 @@ class PayrollReceiptImportService
 
             $entry->save();
 
-            $batch->forceFill([
-                'total_amount_minor' => (int) $batch->entries()->sum('amount_minor'),
-                'status' => $this->resolveBatchStatus($batch),
-                'executed_at' => $generatedAt,
-            ])->save();
+            $this->payrollStatusService->syncLoadedBatch(
+                $batch,
+                $batch->entries()->orderBy('id')->get(),
+                $generatedAt,
+            );
 
             $entry->payoutExecution?->forceFill([
                 'status' => $txSignature ? PayoutExecution::STATUS_IMPORTED : PayoutExecution::STATUS_AWAITING_APPROVAL,
@@ -226,37 +243,21 @@ class PayrollReceiptImportService
         $decimals = (int) data_get($receipt, 'token.decimals', 0);
 
         if (! is_numeric($transferAmount)) {
-            throw new UserFacingException('Receipt does not contain a numeric confidential transfer amount.');
+            throw new UserFacingException(__('ui.messages.receipt_amount_not_numeric'));
         }
 
         return (int) round((float) $transferAmount * (10 ** $decimals));
     }
 
-    private function resolveBatchStatus(PayrollBatch $batch): string
+    private function supportedCurrency(): string
     {
-        $entries = $batch->entries()->get(['paid_at']);
-
-        if ($entries->isEmpty()) {
-            return 'draft';
-        }
-
-        if ($entries->every(fn (PayrollEntry $entry) => $entry->paid_at !== null)) {
-            return 'executed';
-        }
-
-        if ($entries->contains(fn (PayrollEntry $entry) => $entry->paid_at !== null)) {
-            return 'partially_paid';
-        }
-
-        return 'pending';
+        return (string) config('payroll.currency.code', 'USDC');
     }
 
-    private function resolveEffectiveCompensation(Employee $employee, CarbonImmutable $dueDate): ?CompensationAmendment
+    private function assertSupportedCurrency(string $currency, string $message): void
     {
-        return $employee->compensationAmendments()
-            ->whereDate('effective_date', '<=', $dueDate->toDateString())
-            ->orderByDesc('effective_date')
-            ->orderByDesc('id')
-            ->first();
+        if ($currency !== $this->supportedCurrency()) {
+            throw new UserFacingException($message);
+        }
     }
 }

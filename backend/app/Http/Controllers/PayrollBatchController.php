@@ -6,6 +6,7 @@ use App\Exceptions\UserFacingException;
 use App\Http\Requests\StorePayrollBatchRequest;
 use App\Models\PayrollBatch;
 use App\Services\Payroll\PayrollBatchDraftService;
+use App\Services\Solana\PayrollAnchoringService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -38,6 +39,7 @@ class PayrollBatchController extends Controller
     public function store(
         StorePayrollBatchRequest $request,
         PayrollBatchDraftService $payrollBatchDraftService,
+        PayrollAnchoringService $payrollAnchoringService,
     ): RedirectResponse {
         $this->authorize('create', PayrollBatch::class);
 
@@ -61,12 +63,16 @@ class PayrollBatchController extends Controller
             return redirect()
                 ->route('payroll-batches.index')
                 ->withInput()
-                ->with('error', 'The payroll batch could not be drafted right now. Check the application logs and try again.');
+                ->with('error', __('ui.messages.payroll_batch_draft_failed'));
         }
+
+        $anchorWarning = $this->syncBatchWarning($payrollAnchoringService, $batch);
 
         return redirect()
             ->route('payroll-batches.show', $batch)
-            ->with('status', "Payroll batch {$batch->period_year}-".str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT).' drafted from the latest effective compensation records.');
+            ->with('status', trim(__('ui.messages.payroll_batch_drafted', [
+                'period' => "{$batch->period_year}-".str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT),
+            ]).($anchorWarning ? " {$anchorWarning}" : '')));
     }
 
     public function show(Request $request, PayrollBatch $payrollBatch): View
@@ -80,11 +86,28 @@ class PayrollBatchController extends Controller
                 ->with(['employee', 'compensationAmendment', 'payoutExecution'])
                 ->orderBy('due_date')
                 ->orderBy('id'),
+            'latestAnchorAttestation',
+            'latestExecutionAttestation',
         ]);
 
         return view('payroll.batches.show', [
             'company' => $company,
             'payrollBatch' => $payrollBatch,
         ]);
+    }
+
+    private function syncBatchWarning(
+        PayrollAnchoringService $payrollAnchoringService,
+        PayrollBatch $batch,
+    ): ?string {
+        try {
+            return $payrollAnchoringService->syncPayrollBatch($batch);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return __('ui.messages.payroll_batch_anchor_failed');
+        }
     }
 }

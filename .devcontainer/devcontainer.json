@@ -8,7 +8,7 @@
   "containerEnv": {
     "XDEBUG_MODE": "off"
   },
-  "forwardPorts": [8000, 3306, 6379, 8899, 8900, 5173],
+  "forwardPorts": [8000, 3306, 8899, 8900, 5173],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {

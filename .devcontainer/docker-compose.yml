@@ -1,3 +1,5 @@
+name: frontiers-hackathon_devcontainer
+
 services:
   app:
     platform: linux/amd64
@@ -10,8 +12,6 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      redis:
-        condition: service_started
 
   mysql:
     image: mysql:8.4
@@ -31,15 +31,5 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
 
-  redis:
-    image: redis:7.4-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
 volumes:
   mysql-data:
-  redis-data:

@@ -29,5 +29,8 @@
   },
   "transactions": {
     "confidential_transfer": "__TX_SIGNATURE__"
+  },
+  "balances": {
+    "employee_public_balance": "0"
   }
 }

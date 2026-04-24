@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Exceptions\UserFacingException;
 use App\Http\Requests\ImportPayoutReceiptRequest;
 use App\Http\Requests\PreparePayoutExecutionRequest;
+use App\Models\PayrollBatch;
 use App\Models\PayoutExecution;
 use App\Services\Payroll\ConfidentialPayrollService;
 use App\Services\Payroll\PayrollReceiptImportService;
+use App\Services\Solana\PayrollAnchoringService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -17,23 +19,36 @@ use Throwable;
 
 class PayrollDemoController extends Controller
 {
-    public function show(Request $request, ConfidentialPayrollService $confidentialPayrollService): View
+    public function show(Request $request): View
     {
         $this->authorize('viewAny', PayoutExecution::class);
 
         $company = $this->currentCompany($request);
-        $latestExecution = $confidentialPayrollService->latestExecution($company);
+        $batches = $company->payrollBatches()
+            ->withCount('entries')
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->get();
+        $selectedBatchId = $request->integer('payroll_batch_id');
+        $selectedBatch = $batches->firstWhere('id', $selectedBatchId)
+            ?? $batches->first(fn (PayrollBatch $batch) => $batch->entries_count > 0)
+            ?? $batches->first();
+
+        if ($selectedBatch) {
+            $selectedBatch->load([
+                'entries' => fn ($query) => $query
+                    ->with(['employee', 'payoutExecution.payrollEntry'])
+                    ->orderBy('id'),
+                'latestAnchorAttestation',
+                'latestExecutionAttestation',
+            ]);
+        }
 
         return view('payroll.demo', [
             'company' => $company,
-            'employees' => $company->employees()->orderBy('full_name')->get(),
-            'latestExecution' => $latestExecution,
-            'recentExecutions' => $company->payoutExecutions()
-                ->with(['employee', 'payrollEntry.payrollBatch'])
-                ->latest('updated_at')
-                ->limit(5)
-                ->get(),
-            'defaultDueDate' => now()->endOfMonth()->toDateString(),
+            'batches' => $batches,
+            'selectedBatch' => $selectedBatch,
+            'receiptSummaries' => $this->receiptSummariesForBatch($selectedBatch),
         ]);
     }
 
@@ -43,37 +58,43 @@ class PayrollDemoController extends Controller
     ): RedirectResponse {
         $company = $this->currentCompany($request);
         $validated = $request->validated();
-        $employee = $company->employees()->findOrFail($validated['employee_id']);
+        $batch = $company->payrollBatches()->findOrFail($validated['payroll_batch_id']);
 
         try {
-            $execution = $confidentialPayrollService->prepareExecution(
+            $preparedExecutions = $confidentialPayrollService->prepareBatchExecutions(
                 $company,
-                $employee,
-                $validated['due_date'],
+                $batch,
             );
         } catch (UserFacingException $userFacingException) {
             return redirect()
-                ->route('payroll-demo.show')
+                ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
                 ->withInput()
                 ->with('error', $userFacingException->getMessage());
         } catch (Throwable $throwable) {
             report($throwable);
 
             return redirect()
-                ->route('payroll-demo.show')
+                ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
                 ->withInput()
-                ->with('error', 'Could not prepare the payout manifest. Check the application logs and try again.');
+                ->with('error', __('ui.messages.prepare_manifest_failed'));
         }
 
         return redirect()
-            ->route('payroll-demo.show')
-            ->with('status', "Prepared payout execution #{$execution->id} for {$employee->full_name}. The next step is an admin-controlled local signer run, followed by receipt import.");
+            ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
+            ->with(
+                'status',
+                __('ui.messages.prepared_manifests', [
+                    'count' => $preparedExecutions->count(),
+                    'period' => sprintf('%d-%02d', $batch->period_year, $batch->period_month),
+                ]),
+            );
     }
 
     public function import(
         ImportPayoutReceiptRequest $request,
         ConfidentialPayrollService $confidentialPayrollService,
         PayrollReceiptImportService $payrollReceiptImportService,
+        PayrollAnchoringService $payrollAnchoringService,
     ): RedirectResponse {
         $company = $this->currentCompany($request);
         $validated = $request->validated();
@@ -87,7 +108,7 @@ class PayrollDemoController extends Controller
             $contents = $request->file('receipt')->get();
 
             if (! is_string($contents) || $contents === '') {
-                throw new UserFacingException('Uploaded receipt could not be read.');
+                throw new UserFacingException(__('ui.messages.receipt_unreadable'));
             }
 
             $receipt = $confidentialPayrollService->decodeJsonReceipt($contents);
@@ -97,24 +118,43 @@ class PayrollDemoController extends Controller
             $this->markExecutionFailure($execution, $userFacingException->getMessage());
 
             return redirect()
-                ->route('payroll-demo.show')
+                ->route('payroll-demo.show', ['payroll_batch_id' => $execution->payrollEntry->payroll_batch_id])
                 ->withInput()
                 ->with('error', $userFacingException->getMessage());
         } catch (Throwable $throwable) {
             report($throwable);
 
-            $message = 'Receipt import failed. Check the application logs and try again.';
+            $message = __('ui.messages.receipt_import_failed');
             $this->markExecutionFailure($execution, $message);
 
             return redirect()
-                ->route('payroll-demo.show')
+                ->route('payroll-demo.show', ['payroll_batch_id' => $execution->payrollEntry->payroll_batch_id])
                 ->withInput()
                 ->with('error', $message);
         }
 
+        $batch = $entry->payrollBatch->fresh([
+            'latestAnchorAttestation',
+            'latestExecutionAttestation',
+        ]);
+        $executionWarning = $this->syncExecutedBatchWarning($payrollAnchoringService, $batch);
         return redirect()
-            ->route('payroll-batches.show', $entry->payrollBatch)
-            ->with('status', "Imported payout receipt for {$execution->employee->full_name}. Final approval is now attributed to {$execution->fresh()->approved_wallet_address}.");
+            ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
+            ->with(
+                'status',
+                trim(implode(' ', array_filter([
+                    __('ui.messages.receipt_imported', [
+                        'employee' => $execution->employee->full_name,
+                        'wallet' => $execution->fresh()->approved_wallet_address,
+                    ]),
+                    $batch->status === PayrollBatch::STATUS_EXECUTED
+                        ? __('ui.messages.batch_reconciled', [
+                            'period' => sprintf('%d-%02d', $batch->period_year, $batch->period_month),
+                        ])
+                        : null,
+                    $executionWarning,
+                ]))),
+            );
     }
 
     public function downloadManifest(
@@ -142,5 +182,56 @@ class PayrollDemoController extends Controller
             'status' => PayoutExecution::STATUS_FAILED,
             'failure_reason' => $message,
         ])->save();
+    }
+
+    /**
+     * @return array<int, array{amount_minor:?int,confidential_transfer_amount:mixed,employee_public_balance:mixed}>
+     */
+    private function receiptSummariesForBatch(?PayrollBatch $batch): array
+    {
+        if (! $batch) {
+            return [];
+        }
+
+        $summaries = [];
+
+        foreach ($batch->entries as $entry) {
+            $execution = $entry->payoutExecution;
+
+            if (! $execution?->receipt_path || ! Storage::disk('local')->exists($execution->receipt_path)) {
+                continue;
+            }
+
+            $receipt = json_decode(Storage::disk('local')->get($execution->receipt_path), true);
+
+            if (! is_array($receipt)) {
+                continue;
+            }
+
+            $summaries[$execution->id] = [
+                'amount_minor' => is_numeric(data_get($receipt, 'payroll.amount_minor'))
+                    ? (int) data_get($receipt, 'payroll.amount_minor')
+                    : null,
+                'confidential_transfer_amount' => data_get($receipt, 'payroll.confidential_transfer_amount'),
+                'employee_public_balance' => data_get($receipt, 'balances.employee_public_balance'),
+            ];
+        }
+
+        return $summaries;
+    }
+
+    private function syncExecutedBatchWarning(
+        PayrollAnchoringService $payrollAnchoringService,
+        PayrollBatch $batch,
+    ): ?string {
+        try {
+            return $payrollAnchoringService->syncExecutedPayrollBatch($batch);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return __('ui.messages.payroll_batch_execution_attestation_failed');
+        }
     }
 }

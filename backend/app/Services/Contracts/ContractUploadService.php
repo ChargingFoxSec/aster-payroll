@@ -29,14 +29,14 @@ class ContractUploadService
         );
 
         if (! is_string($storedPath) || $storedPath === '') {
-            throw new UserFacingException('The contract PDF could not be stored securely.');
+            throw new UserFacingException(__('ui.messages.contract_pdf_store_failed'));
         }
 
         $absolutePath = Storage::disk('local')->path($storedPath);
         $fileHash = hash_file('sha256', $absolutePath);
 
         if (! is_string($fileHash)) {
-            throw new UserFacingException('The contract hash could not be generated.');
+            throw new UserFacingException(__('ui.messages.contract_hash_generate_failed'));
         }
 
         return $employee->contracts()->create([

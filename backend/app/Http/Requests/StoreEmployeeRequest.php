@@ -19,22 +19,27 @@ class StoreEmployeeRequest extends FormRequest
     public function rules(): array
     {
         $companyId = $this->user()?->company_id;
+        $supportedCurrency = (string) config('payroll.currency.code', 'USDC');
 
         return [
             'full_name' => ['required', 'string', 'max:255'],
-            'email' => [
+            'email' => array_values(array_filter([
                 'required',
                 'email',
                 'max:255',
                 Rule::unique('employees', 'email')->where(
                     fn ($query) => $query->where('company_id', $companyId),
                 ),
-            ],
+                $this->boolean('provision_portal_account')
+                    ? Rule::unique('users', 'email')
+                    : null,
+            ])),
             'wallet_address' => ['nullable', 'string', 'max:64'],
             'employment_status' => ['required', Rule::in(['active', 'paused', 'terminated'])],
             'start_date' => ['nullable', 'date'],
             'pay_cycle' => ['required', Rule::in(['monthly', 'semi_monthly', 'bi_weekly'])],
-            'currency' => ['required', 'string', 'max:8'],
+            'currency' => ['required', Rule::in([$supportedCurrency])],
+            'provision_portal_account' => ['nullable', 'boolean'],
         ];
     }
 
@@ -44,6 +49,7 @@ class StoreEmployeeRequest extends FormRequest
             'email' => strtolower(trim((string) $this->input('email'))),
             'wallet_address' => $this->normalizeOptionalString('wallet_address'),
             'currency' => strtoupper(trim((string) $this->input('currency'))),
+            'provision_portal_account' => $this->boolean('provision_portal_account'),
         ]);
     }
 

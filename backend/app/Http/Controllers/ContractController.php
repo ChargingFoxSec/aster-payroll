@@ -7,6 +7,7 @@ use App\Http\Requests\StoreEmploymentContractRequest;
 use App\Models\Employee;
 use App\Models\EmploymentContract;
 use App\Services\Contracts\ContractUploadService;
+use App\Services\Solana\PayrollAnchoringService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -20,6 +21,7 @@ class ContractController extends Controller
         StoreEmploymentContractRequest $request,
         Employee $employee,
         ContractUploadService $contractUploadService,
+        PayrollAnchoringService $payrollAnchoringService,
     ): RedirectResponse {
         $this->authorize('manage', $employee);
 
@@ -30,7 +32,7 @@ class ContractController extends Controller
             return redirect()
                 ->route('employees.show', $employee)
                 ->withInput()
-                ->with('error', 'Upload a PDF contract before submitting.');
+                ->with('error', __('ui.messages.contract_pdf_required'));
         }
 
         try {
@@ -40,23 +42,26 @@ class ContractController extends Controller
                 $contractPdf,
                 $request->validated(),
             );
-        } catch (UserFacingException $userFacingException) {
-            return redirect()
-                ->route('employees.show', $employee)
-                ->withInput()
-                ->with('error', $userFacingException->getMessage());
         } catch (Throwable $throwable) {
             report($throwable);
 
             return redirect()
                 ->route('employees.show', $employee)
                 ->withInput()
-                ->with('error', 'The contract could not be stored right now. Check the application logs and try again.');
+                ->with('error', __('ui.messages.contract_store_failed'));
         }
+
+        $anchorWarning = $this->syncContractWarning($payrollAnchoringService, $contract);
 
         return redirect()
             ->route('employees.show', $employee)
-            ->with('status', "Contract v{$contract->version} uploaded and hashed.");
+            ->with(
+                'status',
+                trim(implode(' ', array_filter([
+                    __('ui.messages.contract_uploaded', ['version' => $contract->version]),
+                    $anchorWarning,
+                ]))),
+            );
     }
 
     public function download(Request $request, EmploymentContract $contract): StreamedResponse
@@ -68,5 +73,20 @@ class ContractController extends Controller
             basename($contract->file_path),
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    private function syncContractWarning(
+        PayrollAnchoringService $payrollAnchoringService,
+        EmploymentContract $contract,
+    ): ?string {
+        try {
+            return $payrollAnchoringService->syncContract($contract);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return __('ui.messages.contract_anchor_failed');
+        }
     }
 }

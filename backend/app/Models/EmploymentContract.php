@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'company_id',
@@ -50,5 +51,10 @@ class EmploymentContract extends Model
     public function attestations(): HasMany
     {
         return $this->hasMany(Attestation::class, 'contract_id');
+    }
+
+    public function latestAttestation(): HasOne
+    {
+        return $this->hasOne(Attestation::class, 'contract_id')->latestOfMany();
     }
 }

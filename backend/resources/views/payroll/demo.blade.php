@@ -1,27 +1,37 @@
-<x-layouts.app :title="'Confidential Payroll Demo · Aster Payroll'">
+<x-layouts.app :title="__('ui.pages.demo.title')">
     @php
-        $awaitingApprovalExecutions = $recentExecutions->filter(
+        $batchEntries = $selectedBatch?->entries ?? collect();
+        $executions = $batchEntries
+            ->map(fn ($entry) => $entry->payoutExecution)
+            ->filter()
+            ->sortByDesc('updated_at')
+            ->values();
+        $awaitingApprovalExecutions = $executions->filter(
             fn ($execution) => $execution->status === \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL
         );
+        $importedExecutions = $executions->filter(
+            fn ($execution) => $execution->status === \App\Models\PayoutExecution::STATUS_IMPORTED
+        );
+        $failedExecutions = $executions->filter(
+            fn ($execution) => $execution->status === \App\Models\PayoutExecution::STATUS_FAILED
+        );
     @endphp
+
     <section class="grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Confidential Settlement</p>
-            <h2 class="mt-2 text-3xl font-semibold text-white">Prepare payout, sign locally, import receipt</h2>
+        <div class="panel panel-hero p-6">
+            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.demo.kicker') }}</p>
+            <h2 class="mt-2 text-3xl font-semibold text-white">{{ __('ui.pages.demo.heading') }}</h2>
             <p class="mt-3 text-sm leading-6 text-stone-300">
-                Laravel now stops at payload preparation. The approving admin must run the local signer helper outside
-                the app, then upload the resulting receipt back into the ledger.
+                {{ __('ui.pages.demo.copy') }}
             </p>
 
-            <div class="mt-6 rounded-2xl border border-white/10 bg-stone-950/70 p-4 text-sm text-stone-300">
-                <p class="text-xs uppercase tracking-[0.25em] text-stone-500">Operator boundary</p>
+            <div class="panel-inset mt-6 p-4 text-sm text-stone-300">
+                <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.demo.operator_boundary') }}</p>
                 <p class="mt-2 leading-6">
-                    This UI prepares manifests and imports signed receipts. The actual payout still requires an
-                    explicit admin-controlled signer outside Laravel.
+                    {{ __('ui.pages.demo.operator_copy') }}
                 </p>
                 <p class="mt-4 text-xs text-stone-400">
-                    Download the prepared manifest from the execution panel, run the documented local-signer flow, then
-                    import the generated receipt JSON here.
+                    {{ __('ui.pages.demo.operator_note') }}
                 </p>
             </div>
 
@@ -29,115 +39,180 @@
                 @csrf
                 <div class="space-y-5">
                     <label class="block space-y-2">
-                        <span class="text-sm text-stone-200">Employee</span>
-                        <select name="employee_id" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
-                            @forelse ($employees as $employee)
-                                <option value="{{ $employee->id }}" @selected(old('employee_id') == $employee->id)>{{ $employee->full_name }} · {{ $employee->currency }}</option>
+                        <span class="text-sm text-stone-200">{{ __('ui.fields.payroll_batch') }}</span>
+                        <select name="payroll_batch_id" class="app-field px-4 py-3" required>
+                            @forelse ($batches as $batch)
+                                <option value="{{ $batch->id }}" @selected((int) old('payroll_batch_id', $selectedBatch?->id) === $batch->id)>
+                                    {{ $batch->period_year }}-{{ str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT) }}
+                                    · {{ __('ui.status.'.$batch->status) }}
+                                    · {{ $batch->entries_count }} {{ __('ui.common.entries') }}
+                                </option>
                             @empty
-                                <option value="">Create an employee first</option>
+                                <option value="">{{ __('ui.pages.demo.draft_first') }}</option>
                             @endforelse
                         </select>
                     </label>
-
-                    <label class="block space-y-2">
-                        <span class="text-sm text-stone-200">Due date</span>
-                        <input type="date" name="due_date" value="{{ old('due_date', $defaultDueDate) }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
-                    </label>
                 </div>
 
-                <button type="submit" @disabled($employees->isEmpty()) class="mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-medium text-stone-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-300">
-                    Prepare payout manifest
+                <button type="submit" @disabled($batches->isEmpty()) class="app-button app-button-primary mt-6">
+                    {{ __('ui.actions.prepare_manifests') }}
                 </button>
             </form>
 
-            <form method="POST" action="{{ route('payroll-demo.import') }}" enctype="multipart/form-data" class="mt-8 rounded-2xl border border-white/10 bg-stone-950/50 p-5">
+            <form method="POST" action="{{ route('payroll-demo.import') }}" enctype="multipart/form-data" class="panel-inset mt-8 p-5">
                 @csrf
-                <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">Import Signed Receipt</p>
+                <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.demo.import_signed_receipt') }}</p>
                 <p class="mt-2 text-sm leading-6 text-stone-300">
-                    Choose the prepared payout that was approved locally, then upload the receipt JSON generated by the
-                    signer helper.
+                    {{ __('ui.pages.demo.import_copy') }}
                 </p>
 
                 <div class="mt-5 space-y-5">
                     <label class="block space-y-2">
-                        <span class="text-sm text-stone-200">Prepared payout</span>
-                        <select name="payout_execution_id" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
+                        <span class="text-sm text-stone-200">{{ __('ui.fields.prepared_payout') }}</span>
+                        <select name="payout_execution_id" class="app-field px-4 py-3" required>
                             @forelse ($awaitingApprovalExecutions as $execution)
                                 <option value="{{ $execution->id }}">
-                                    #{{ $execution->id }} · {{ $execution->employee->full_name }} · {{ $execution->payrollEntry->due_date->toDateString() }}
+                                    #{{ $execution->id }}
+                                    · {{ $execution->employee->full_name }}
+                                    · {{ number_format($execution->payrollEntry->amount_minor / 100, 2) }} {{ $execution->payrollEntry->currency }}
                                 </option>
                             @empty
-                                <option value="">No prepared payouts awaiting import</option>
+                                <option value="">{{ __('ui.pages.demo.no_prepared') }}</option>
                             @endforelse
                         </select>
                     </label>
 
                     <label class="block space-y-2">
-                        <span class="text-sm text-stone-200">Receipt JSON</span>
-                        <input type="file" name="receipt" accept=".json,text/plain,application/json" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-sm text-white outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-white focus:border-cyan-300/60" required>
+                        <span class="text-sm text-stone-200">{{ __('ui.fields.receipt_json') }}</span>
+                        <input type="file" name="receipt" accept=".json,text/plain,application/json" class="app-field app-file-field px-4 py-3 text-sm text-white" required>
                     </label>
                 </div>
 
-                <button type="submit" @disabled($awaitingApprovalExecutions->isEmpty()) class="mt-6 inline-flex rounded-full bg-amber-300 px-5 py-3 text-sm font-medium text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-300">
-                    Import receipt into ledger
+                <button type="submit" @disabled($awaitingApprovalExecutions->isEmpty()) class="app-button app-button-amber mt-6">
+                    {{ __('ui.actions.import_receipt') }}
                 </button>
             </form>
 
             <ol class="mt-6 space-y-3 text-sm leading-6 text-stone-300">
-                <li>1. Start the native validator with <code class="rounded bg-white/10 px-2 py-1 text-xs">./scripts/start-confidential-validator.sh</code>.</li>
-                <li>2. Prepare a payout manifest in Laravel, download it, then run the signer flow locally with the admin-controlled company keypair.</li>
-                <li>3. Upload the generated receipt JSON here so Laravel can index the tx signature without owning the signer.</li>
+                <li>{{ __('ui.pages.demo.step_1') }}</li>
+                <li>{{ __('ui.pages.demo.step_2') }} <code class="rounded bg-white/10 px-2 py-1 text-xs">./scripts/start-confidential-validator.sh</code>.</li>
+                <li>{{ __('ui.pages.demo.step_3') }}</li>
+                <li>{{ __('ui.pages.demo.step_4') }}</li>
             </ol>
         </div>
 
-        <div class="rounded-3xl border border-white/10 bg-stone-900/70 p-6">
-            <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">Prepared / Imported Executions</p>
+        <div class="panel panel-soft p-6">
+            <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.demo.progress') }}</p>
 
-            @if ($latestExecution)
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-2xl border border-white/10 bg-stone-950/70 p-4">
-                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">Execution</p>
-                        <p class="mt-2 text-2xl font-semibold text-white">#{{ $latestExecution->id }}</p>
-                        <p class="mt-2 text-sm text-stone-300">{{ str($latestExecution->status)->replace('_', ' ')->title() }}</p>
+            @if ($selectedBatch)
+                <div class="mt-4 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.fields.focused_batch') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-white">
+                            {{ $selectedBatch->period_year }}-{{ str_pad((string) $selectedBatch->period_month, 2, '0', STR_PAD_LEFT) }}
+                        </p>
+                        <p class="mt-2 text-sm text-stone-300">
+                            {{ __('ui.status.'.$selectedBatch->status) }}
+                            · {{ __('ui.common.due') }} {{ $selectedBatch->due_date->toDateString() }}
+                        </p>
                     </div>
-                    <div class="rounded-2xl border border-white/10 bg-stone-950/70 p-4">
-                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">Prepared Payload</p>
-                        @if ($latestExecution->prepared_payload_path)
-                            <a href="{{ route('payroll-demo.executions.manifest', $latestExecution) }}" class="mt-2 inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-cyan-100 transition hover:border-cyan-300/60 hover:text-cyan-50">
-                                Download manifest JSON
-                            </a>
-                            <p class="mt-3 text-xs text-stone-400">Use the downloaded manifest in the documented local-signer flow outside Laravel.</p>
-                        @else
-                            <p class="mt-2 text-sm text-stone-300">Manifest not generated yet.</p>
-                        @endif
+
+                    <a href="{{ route('payroll-batches.show', $selectedBatch) }}" class="app-button app-button-secondary">
+                        {{ __('ui.actions.open_batch_detail') }}
+                    </a>
+                </div>
+
+                <div class="mt-6 grid gap-4 md:grid-cols-4">
+                    <div class="panel-inset p-4">
+                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.common.entries') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-white">{{ $batchEntries->count() }}</p>
+                    </div>
+                    <div class="panel-inset p-4">
+                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.status.awaiting_approval') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-white">{{ $awaitingApprovalExecutions->count() }}</p>
+                    </div>
+                    <div class="panel-inset p-4">
+                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.common.imported') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-white">{{ $importedExecutions->count() }}</p>
+                    </div>
+                    <div class="panel-inset p-4">
+                        <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.common.failed') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-white">{{ $failedExecutions->count() }}</p>
                     </div>
                 </div>
 
+                <div class="panel-inset mt-6 p-4 text-sm text-stone-300">
+                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.demo.onchain_traceability') }}</p>
+                    <p class="mt-3 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_account') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $selectedBatch->anchor_batch_pubkey ?: __('ui.common.pending') }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_anchor_tx') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->latestAnchorAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_executed_tx') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs {{ $selectedBatch->latestExecutionAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
+                        {{ $selectedBatch->latestExecutionAttestation?->tx_signature ?: ($selectedBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
+                    </p>
+                </div>
+
                 <div class="mt-6 space-y-3">
-                    @foreach ($recentExecutions as $execution)
-                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
+                    @foreach ($batchEntries as $entry)
+                        @php($execution = $entry->payoutExecution)
+                        @php($receiptSummary = $execution ? ($receiptSummaries[$execution->id] ?? null) : null)
+                        <div class="panel-inset p-4">
+                            <div class="flex flex-wrap items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">Execution #{{ $execution->id }}</p>
-                                    <p class="mt-2 text-sm text-stone-100">{{ $execution->employee->full_name }} · batch {{ $execution->payrollEntry->payrollBatch->period_year }}-{{ str_pad((string) $execution->payrollEntry->payrollBatch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
+                                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ $entry->employee->full_name }}</p>
+                                    <p class="mt-2 text-sm text-stone-100">
+                                        {{ number_format($entry->amount_minor / 100, 2) }} {{ $entry->currency }}
+                                        · {{ __('ui.common.due') }} {{ $entry->due_date->toDateString() }}
+                                    </p>
                                 </div>
-                                <span class="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-cyan-100">{{ str($execution->status)->replace('_', ' ')->title() }}</span>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="status-pill">{{ __('ui.status.'.$entry->status) }}</span>
+                                    <span class="status-pill">{{ $execution ? __('ui.status.'.$execution->status) : __('ui.common.not_prepared') }}</span>
+                                </div>
                             </div>
-                            @if ($execution->prepared_payload_path)
+
+                            @if ($execution?->prepared_payload_path)
                                 <div class="mt-3">
-                                    <a href="{{ route('payroll-demo.executions.manifest', $execution) }}" class="text-xs text-cyan-200 transition hover:text-cyan-100">Download manifest JSON</a>
+                                    <a href="{{ route('payroll-demo.executions.manifest', $execution) }}" class="inline-link text-xs">{{ __('ui.actions.download_manifest_json') }}</a>
                                 </div>
                             @endif
-                            @if ($execution->approved_wallet_address)
-                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">Approving wallet</p>
+
+                            @if ($execution?->approved_wallet_address)
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.approving_wallet') }}</p>
                                 <p class="mt-1 break-all font-mono text-xs text-sky-100">{{ $execution->approved_wallet_address }}</p>
                             @endif
-                            @if ($execution->tx_signature)
-                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">Imported tx signature</p>
+
+                            @if ($execution?->tx_signature)
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.imported_tx_signature') }}</p>
                                 <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $execution->tx_signature }}</p>
+                            @elseif ($entry->tx_signature)
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.entry_tx_signature') }}</p>
+                                <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $entry->tx_signature }}</p>
                             @endif
-                            @if ($execution->failure_reason)
-                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">Last import status</p>
+
+                            @if ($receiptSummary)
+                                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.receipt_confidential_amount') }}</p>
+                                        <p class="mt-1 font-mono text-xs text-emerald-100">
+                                            {{ $receiptSummary['amount_minor'] !== null ? number_format($receiptSummary['amount_minor'] / 100, 2).' '.$entry->currency : __('ui.common.not_reported') }}
+                                            @if ($receiptSummary['confidential_transfer_amount'] !== null)
+                                                <span class="text-stone-500">{{ __('ui.pages.demo.private_units', ['amount' => $receiptSummary['confidential_transfer_amount']]) }}</span>
+                                            @endif
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.employee_public_balance') }}</p>
+                                        <p class="mt-1 font-mono text-xs text-stone-300">{{ $receiptSummary['employee_public_balance'] ?? __('ui.common.hidden_not_reported') }}</p>
+                                    </div>
+                                </div>
+                            @endif
+
+                            @if ($execution?->failure_reason)
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.failure_status') }}</p>
                                 <p class="mt-1 text-xs text-rose-200">{{ $execution->failure_reason }}</p>
                             @endif
                         </div>
@@ -145,8 +220,7 @@
                 </div>
             @else
                 <p class="mt-4 text-sm leading-6 text-stone-300">
-                    No payout execution yet. Prepare the first manifest from the left-hand form, then use the local
-                    signer helper so this panel can show who approved the payout and which tx signature was imported.
+                    {{ __('ui.pages.demo.no_batch') }}
                 </p>
             @endif
         </div>

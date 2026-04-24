@@ -5,9 +5,12 @@ namespace App\Services\Payroll;
 use App\Exceptions\UserFacingException;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\PayrollBatch;
+use App\Models\PayrollEntry;
 use App\Models\PayoutExecution;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Throwable;
@@ -35,11 +38,40 @@ class ConfidentialPayrollService
         $execution = $this->latestExecution($company);
         $receiptPath = $execution?->receipt_path;
 
-        if ($receiptPath) {
-            return $this->readStoredJson($receiptPath);
+        return $receiptPath ? $this->readStoredJson($receiptPath) : null;
+    }
+
+    /**
+     * @return Collection<int, PayoutExecution>
+     */
+    public function prepareBatchExecutions(
+        Company $company,
+        PayrollBatch $payrollBatch,
+    ): Collection {
+        if ($payrollBatch->company_id !== $company->id) {
+            throw new InvalidArgumentException('Payroll batch does not belong to the selected company.');
         }
 
-        return $this->readStoredJson($this->legacyReceiptPath());
+        $payrollBatch->loadMissing([
+            'entries' => fn ($query) => $query
+                ->with(['employee', 'payrollBatch', 'payoutExecution'])
+                ->orderBy('id'),
+        ]);
+
+        if ($payrollBatch->entries->isEmpty()) {
+            throw new UserFacingException(__('ui.messages.batch_has_no_entries'));
+        }
+
+        $preparedExecutions = $payrollBatch->entries
+            ->filter(fn ($entry) => $entry->paid_at === null && $entry->tx_signature === null)
+            ->map(fn ($entry) => $this->prepareEntryExecution($company, $entry))
+            ->filter();
+
+        if ($preparedExecutions->isEmpty()) {
+            throw new UserFacingException(__('ui.messages.batch_all_entries_imported'));
+        }
+
+        return $preparedExecutions->values();
     }
 
     public function prepareExecution(
@@ -63,11 +95,16 @@ class ConfidentialPayrollService
             ->first();
 
         if ($entry === null) {
-            throw new UserFacingException('Selected employee does not have an effective compensation record for the requested due date.');
+            throw new UserFacingException(__('ui.messages.missing_effective_compensation_for_due_date'));
         }
 
+        return $this->prepareEntryExecution($company, $entry);
+    }
+
+    private function prepareEntryExecution(Company $company, PayrollEntry $entry): PayoutExecution
+    {
         if ($entry->paid_at !== null || $entry->tx_signature !== null) {
-            throw new UserFacingException('This payroll entry already has an imported payout receipt.');
+            throw new UserFacingException(__('ui.messages.payroll_entry_has_imported_receipt'));
         }
 
         $execution = PayoutExecution::query()->firstOrNew([
@@ -75,15 +112,15 @@ class ConfidentialPayrollService
         ]);
 
         if ($execution->exists && $execution->isImported()) {
-            throw new UserFacingException('This payroll entry has already been imported into the ledger.');
+            throw new UserFacingException(__('ui.messages.payroll_entry_already_imported_to_ledger'));
         }
 
         $execution->fill([
             'company_id' => $company->id,
-            'employee_id' => $employee->id,
+            'employee_id' => $entry->employee_id,
             'approval_method' => PayoutExecution::APPROVAL_METHOD_LOCAL_SIGNER,
             'status' => PayoutExecution::STATUS_AWAITING_APPROVAL,
-            'prepared_payload_path' => $execution->prepared_payload_path ?: $this->preparedPayloadPathForId($execution->id ?? 0),
+            'prepared_payload_path' => $execution->prepared_payload_path ?: '',
             'receipt_path' => null,
             'approved_wallet_address' => null,
             'tx_signature' => null,
@@ -102,11 +139,11 @@ class ConfidentialPayrollService
             $payloadContents = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
             $stored = Storage::disk('local')->put($payloadPath, $payloadContents);
         } catch (Throwable $throwable) {
-            throw new UserFacingException('Could not write the payout manifest to private storage.', previous: $throwable);
+            throw new UserFacingException(__('ui.messages.payout_manifest_store_failed'), previous: $throwable);
         }
 
         if ($stored === false) {
-            throw new UserFacingException('Could not write the payout manifest to private storage.');
+            throw new UserFacingException(__('ui.messages.payout_manifest_store_failed'));
         }
 
         $execution->forceFill([
@@ -124,7 +161,7 @@ class ConfidentialPayrollService
         $decoded = json_decode($contents, true);
 
         if (! is_array($decoded)) {
-            throw new UserFacingException('Uploaded receipt is not valid JSON.');
+            throw new UserFacingException(__('ui.messages.receipt_invalid_json'));
         }
 
         return $decoded;
@@ -135,7 +172,7 @@ class ConfidentialPayrollService
         $path = $this->importedReceiptPathForId($execution->id);
 
         if (Storage::disk('local')->put($path, $contents) === false) {
-            throw new UserFacingException('Could not store the imported receipt in private storage.');
+            throw new UserFacingException(__('ui.messages.receipt_store_failed'));
         }
 
         return $path;
@@ -144,21 +181,6 @@ class ConfidentialPayrollService
     public function manifestDownloadName(PayoutExecution $execution): string
     {
         return "payout-execution-{$execution->id}-manifest.json";
-    }
-
-    public function receiptPath(?PayoutExecution $execution = null): ?string
-    {
-        if ($execution?->receipt_path) {
-            return Storage::disk('local')->path($execution->receipt_path);
-        }
-
-        $latestExecution = $this->latestExecution();
-
-        if ($latestExecution?->receipt_path) {
-            return Storage::disk('local')->path($latestExecution->receipt_path);
-        }
-
-        return is_file($this->legacyReceiptPath()) ? $this->legacyReceiptPath() : null;
     }
 
     public function scriptPath(): string
@@ -205,11 +227,6 @@ class ConfidentialPayrollService
     private function importedReceiptPathForId(int $executionId): string
     {
         return trim((string) config('payroll.confidential.imported_receipt_dir'), '/')."/execution-{$executionId}-receipt.json";
-    }
-
-    private function legacyReceiptPath(): string
-    {
-        return (string) config('payroll.confidential.receipt_path');
     }
 
     private function mintDecimals(): int

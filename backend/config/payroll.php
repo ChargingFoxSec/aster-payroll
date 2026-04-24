@@ -7,11 +7,24 @@ return [
         'wallet_address' => env('ASTER_DEMO_COMPANY_WALLET'),
     ],
 
+    'currency' => [
+        'code' => env('ASTER_PAYROLL_CURRENCY', 'USDC'),
+        'minor_unit' => (int) env('ASTER_PAYROLL_CURRENCY_MINOR_UNIT', 2),
+    ],
+
+    'anchor' => [
+        'rpc_url' => env('ASTER_SOLANA_RPC_URL', 'http://aster-payroll-confidential-validator:8899'),
+        'program_id' => env('ASTER_ANCHOR_PROGRAM_ID', '4SZ4Fdt4pYurKjtdfEkHvRm9zZ2uTnHmdkGFrQxp1EhE'),
+        'wallet_path' => env('ASTER_ANCHOR_WALLET', env('ANCHOR_WALLET', '')),
+        'script' => env('ASTER_ANCHOR_SCRIPT', base_path('../onchain/scripts/anchor-attest.js')),
+        'node_binary' => env('ASTER_NODE_BINARY', 'node'),
+        'timeout_seconds' => (int) env('ASTER_ANCHOR_TIMEOUT_SECONDS', 120),
+    ],
+
     'confidential' => [
         'rpc_url' => env('ASTER_SOLANA_RPC_URL', 'http://aster-payroll-confidential-validator:8899'),
         'poc_script' => env('ASTER_CONFIDENTIAL_POC_SCRIPT', base_path('../onchain/scripts/confidential-payroll-poc.sh')),
         'work_dir' => env('ASTER_CONFIDENTIAL_POC_WORK_DIR', storage_path('app/private/payroll/confidential-poc')),
-        'receipt_path' => env('ASTER_CONFIDENTIAL_RECEIPT_PATH', storage_path('app/private/payroll/confidential-payroll-receipt.json')),
         'prepared_payload_dir' => env('ASTER_CONFIDENTIAL_PREPARED_PAYLOAD_DIR', 'payroll/prepared-payouts'),
         'imported_receipt_dir' => env('ASTER_CONFIDENTIAL_IMPORTED_RECEIPT_DIR', 'payroll/imported-receipts'),
         'mint_decimals' => (int) env('ASTER_CONFIDENTIAL_MINT_DECIMALS', 2),

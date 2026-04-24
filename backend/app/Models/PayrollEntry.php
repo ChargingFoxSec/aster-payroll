@@ -23,6 +23,14 @@ class PayrollEntry extends Model
 {
     use HasFactory;
 
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_PAID = 'paid';
+
+    public const STATUS_OVERDUE = 'overdue';
+
     protected function casts(): array
     {
         return [

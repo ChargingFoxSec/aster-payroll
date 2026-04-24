@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'company_id',
@@ -50,5 +51,15 @@ class CompensationAmendment extends Model
     public function payrollEntries(): HasMany
     {
         return $this->hasMany(PayrollEntry::class);
+    }
+
+    public function attestations(): HasMany
+    {
+        return $this->hasMany(Attestation::class);
+    }
+
+    public function latestAttestation(): HasOne
+    {
+        return $this->hasOne(Attestation::class)->latestOfMany();
     }
 }

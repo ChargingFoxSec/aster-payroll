@@ -21,14 +21,13 @@ class PreparePayoutExecutionRequest extends FormRequest
         $companyId = $this->user()?->company_id;
 
         return [
-            'employee_id' => [
+            'payroll_batch_id' => [
                 'required',
                 'integer',
-                Rule::exists('employees', 'id')->where(
+                Rule::exists('payroll_batches', 'id')->where(
                     fn ($query) => $query->where('company_id', $companyId),
                 ),
             ],
-            'due_date' => ['required', 'date'],
         ];
     }
 }

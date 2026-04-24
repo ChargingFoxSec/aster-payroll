@@ -4,8 +4,6 @@ namespace App\Services\Payroll;
 
 use App\Exceptions\UserFacingException;
 use App\Models\Company;
-use App\Models\CompensationAmendment;
-use App\Models\Employee;
 use App\Models\PayrollBatch;
 use App\Models\PayrollEntry;
 use Carbon\CarbonImmutable;
@@ -14,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollBatchDraftService
 {
+    public function __construct(
+        private readonly PayrollStatusService $payrollStatusService,
+    ) {}
+
     public function createOrRefresh(
         Company $company,
         string $period,
@@ -30,7 +32,7 @@ class PayrollBatchDraftService
             ]);
 
             $batch->fill([
-                'currency' => $company->employees()->value('currency') ?? 'USDC',
+                'currency' => $this->supportedCurrency(),
                 'due_date' => $dueDate->toDateString(),
             ]);
             $batch->status ??= 'draft';
@@ -44,11 +46,21 @@ class PayrollBatchDraftService
                 ->get();
 
             foreach ($employees as $employee) {
-                $amendment = $this->resolveEffectiveCompensation($employee, $dueDate);
+                $this->assertSupportedCurrency(
+                    $employee->currency,
+                    __('ui.messages.employee_currency_unsupported_for_batch_draft', ['currency' => $this->supportedCurrency()]),
+                );
+
+                $amendment = $employee->effectiveCompensationAt($dueDate);
 
                 if (! $amendment) {
                     continue;
                 }
+
+                $this->assertSupportedCurrency(
+                    $amendment->currency,
+                    __('ui.messages.compensation_currency_unsupported_for_batch_draft', ['currency' => $this->supportedCurrency()]),
+                );
 
                 $eligibleEmployeeIds[] = $employee->id;
 
@@ -64,7 +76,7 @@ class PayrollBatchDraftService
                 $entry->fill([
                     'compensation_amendment_id' => $amendment->id,
                     'amount_minor' => $amendment->new_amount_minor,
-                    'currency' => $amendment->currency,
+                    'currency' => $this->supportedCurrency(),
                     'status' => 'draft',
                     'due_date' => $dueDate->toDateString(),
                     'paid_at' => null,
@@ -83,10 +95,11 @@ class PayrollBatchDraftService
 
             $staleDraftEntries->delete();
 
-            $batch->forceFill([
-                'total_amount_minor' => (int) $batch->entries()->sum('amount_minor'),
-                'status' => $this->resolveBatchStatus($batch),
-            ])->save();
+            $this->payrollStatusService->syncLoadedBatch(
+                $batch,
+                $batch->entries()->orderBy('id')->get(),
+                $dueDate,
+            );
 
             $batch = $batch->fresh([
                 'entries' => fn ($query) => $query
@@ -95,7 +108,7 @@ class PayrollBatchDraftService
             ]);
 
             if (! $batch || $batch->entries->isEmpty()) {
-                throw new UserFacingException('No active employees have an effective compensation record for this payroll batch yet.');
+                throw new UserFacingException(__('ui.messages.no_active_employee_compensation_for_batch'));
             }
 
             return $batch;
@@ -111,31 +124,15 @@ class PayrollBatchDraftService
         return CarbonImmutable::parse($value)->startOfDay();
     }
 
-    private function resolveBatchStatus(PayrollBatch $batch): string
+    private function supportedCurrency(): string
     {
-        $entries = $batch->entries()->get(['paid_at']);
-
-        if ($entries->isEmpty()) {
-            return 'draft';
-        }
-
-        if ($entries->every(fn (PayrollEntry $entry) => $entry->paid_at !== null)) {
-            return 'executed';
-        }
-
-        if ($entries->contains(fn (PayrollEntry $entry) => $entry->paid_at !== null)) {
-            return 'partially_paid';
-        }
-
-        return 'draft';
+        return (string) config('payroll.currency.code', 'USDC');
     }
 
-    private function resolveEffectiveCompensation(Employee $employee, CarbonImmutable $dueDate): ?CompensationAmendment
+    private function assertSupportedCurrency(string $currency, string $message): void
     {
-        return $employee->compensationAmendments()
-            ->whereDate('effective_date', '<=', $dueDate->toDateString())
-            ->orderByDesc('effective_date')
-            ->orderByDesc('id')
-            ->first();
+        if ($currency !== $this->supportedCurrency()) {
+            throw new UserFacingException($message);
+        }
     }
 }

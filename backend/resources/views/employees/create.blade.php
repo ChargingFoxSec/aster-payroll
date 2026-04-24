@@ -1,67 +1,87 @@
-<x-layouts.app :title="'Create Employee · Aster Payroll'">
+<x-layouts.app :title="__('ui.pages.employees.create_title')">
     <section class="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-        <form method="POST" action="{{ route('employees.store') }}" class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+        <form method="POST" action="{{ route('employees.store') }}" class="panel panel-hero p-6">
             @csrf
 
-            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Create Employee</p>
-            <h2 class="mt-2 text-3xl font-semibold text-white">First payroll entity</h2>
+            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.employees.create_kicker') }}</p>
+            <h2 class="mt-2 text-3xl font-semibold text-white">{{ __('ui.pages.employees.create_heading') }}</h2>
 
             <div class="mt-6 grid gap-5 md:grid-cols-2">
                 <label class="space-y-2 md:col-span-2">
-                    <span class="text-sm text-stone-200">Full name</span>
-                    <input type="text" name="full_name" value="{{ old('full_name') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.full_name') }}</span>
+                    <input type="text" name="full_name" value="{{ old('full_name') }}" class="app-field px-4 py-3" required>
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Email</span>
-                    <input type="email" name="email" value="{{ old('email') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.email') }}</span>
+                    <input type="email" name="email" value="{{ old('email') }}" class="app-field px-4 py-3" required>
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Wallet address</span>
-                    <input type="text" name="wallet_address" value="{{ old('wallet_address') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" placeholder="Optional for now">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.wallet_address') }}</span>
+                    <input type="text" name="wallet_address" value="{{ old('wallet_address') }}" class="app-field px-4 py-3" placeholder="{{ __('ui.pages.employees.optional_for_now') }}">
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Employment status</span>
-                    <select name="employment_status" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60">
-                        @foreach (['active' => 'Active', 'paused' => 'Paused', 'terminated' => 'Terminated'] as $value => $label)
-                            <option value="{{ $value }}" @selected(old('employment_status', 'active') === $value)>{{ $label }}</option>
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.employment_status') }}</span>
+                    <select name="employment_status" class="app-field px-4 py-3">
+                        @foreach (['active', 'paused', 'terminated'] as $value)
+                            <option value="{{ $value }}" @selected(old('employment_status', 'active') === $value)>{{ __('ui.status.'.$value) }}</option>
                         @endforeach
                     </select>
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Start date</span>
-                    <input type="date" name="start_date" value="{{ old('start_date') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.start_date') }}</span>
+                    <input type="date" name="start_date" value="{{ old('start_date') }}" class="app-field px-4 py-3">
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Pay cycle</span>
-                    <select name="pay_cycle" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.pay_cycle') }}</span>
+                    <select name="pay_cycle" class="app-field px-4 py-3">
                         @foreach ($payCycles as $value => $label)
-                            <option value="{{ $value }}" @selected(old('pay_cycle', 'monthly') === $value)>{{ $label }}</option>
+                            <option value="{{ $value }}" @selected(old('pay_cycle', 'monthly') === $value)>{{ __('ui.pay_cycles.'.$value) }}</option>
                         @endforeach
                     </select>
                 </label>
 
                 <label class="space-y-2">
-                    <span class="text-sm text-stone-200">Currency</span>
-                    <input type="text" name="currency" value="{{ old('currency', 'USDC') }}" class="w-full rounded-2xl border border-white/10 bg-stone-950/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300/60" required>
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.currency') }}</span>
+                    <input type="hidden" name="currency" value="{{ config('payroll.currency.code', 'USDC') }}">
+                    <div class="app-field px-4 py-3 text-sm text-stone-100">
+                        {{ __('ui.pages.employees.currency_only', ['currency' => config('payroll.currency.code', 'USDC')]) }}
+                    </div>
+                </label>
+
+                <label class="panel-inset flex items-start gap-3 p-4 md:col-span-2">
+                    <input
+                        type="checkbox"
+                        name="provision_portal_account"
+                        value="1"
+                        class="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-cyan-300 focus:ring-cyan-300"
+                        @checked(old('provision_portal_account'))
+                    >
+                    <span>
+                        <span class="block text-sm font-medium text-stone-100">{{ __('ui.pages.employees.create_portal_account') }}</span>
+                        <span class="mt-1 block text-sm leading-6 text-stone-400">
+                            {{ __('ui.pages.employees.create_portal_account_copy') }}
+                        </span>
+                    </span>
                 </label>
             </div>
 
-            <button type="submit" class="mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-medium text-stone-950 transition hover:bg-cyan-200">
-                Save employee
+            <button type="submit" class="app-button app-button-primary mt-6">
+                {{ __('ui.actions.save_employee') }}
             </button>
         </form>
 
-        <div class="rounded-3xl border border-white/10 bg-stone-900/70 p-6">
-            <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">Hackathon Scope</p>
+        <div class="panel panel-soft p-6">
+            <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.employees.scope_kicker') }}</p>
             <ul class="mt-4 space-y-3 text-sm leading-6 text-stone-300">
-                <li>Keep the employee schema small enough to support contract uploads and future payroll batches.</li>
-                <li>Do not build full HRIS workflow or auth matrix in this pass.</li>
-                <li>Wallet can stay optional until the confidential settlement demo is wired into a specific employee flow.</li>
+                <li>{{ __('ui.pages.employees.scope_1') }}</li>
+                <li>{{ __('ui.pages.employees.scope_2') }}</li>
+                <li>{{ __('ui.pages.employees.scope_3') }}</li>
+                <li>{{ __('ui.pages.employees.scope_4') }}</li>
             </ul>
         </div>
     </section>

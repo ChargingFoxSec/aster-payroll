@@ -20,8 +20,13 @@ class StoreCompensationAmendmentRequest extends FormRequest
      */
     public function rules(): array
     {
+        $minorUnit = max(0, (int) config('payroll.currency.minor_unit', 2));
+        $amountPattern = $minorUnit > 0
+            ? '/^\d{1,9}(\.\d{1,'.$minorUnit.'})?$/'
+            : '/^\d{1,9}$/';
+
         return [
-            'new_amount' => ['required', 'regex:/^\d{1,9}(\.\d{1,2})?$/'],
+            'new_amount' => ['required', "regex:{$amountPattern}"],
             'effective_date' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:255'],
         ];

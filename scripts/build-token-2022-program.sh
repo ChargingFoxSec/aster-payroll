@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_CONTAINER="${ASTER_APP_CONTAINER:-frontiers-hackathon_devcontainer-app-1}"
+DOCKER_PROJECT_NAME="${ASTER_DOCKER_PROJECT_NAME:-frontiers-hackathon_devcontainer}"
+APP_CONTAINER="${ASTER_APP_CONTAINER:-${DOCKER_PROJECT_NAME}-app-1}"
 TOKEN_2022_REPO="${ASTER_TOKEN_2022_REPO:-https://github.com/solana-program/token-2022}"
 TOKEN_2022_TAG="${ASTER_TOKEN_2022_TAG:-program@v10.0.0}"
 ARTIFACT_DIR="${ROOT_DIR}/onchain/.artifacts/token-2022-program"

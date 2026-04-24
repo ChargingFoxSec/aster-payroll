@@ -27,7 +27,7 @@ class AuthenticatedSessionController extends Controller
 
         if (! Auth::attempt($credentials)) {
             throw ValidationException::withMessages([
-                'email' => 'The provided credentials do not match our records.',
+                'email' => __('ui.messages.login_invalid_credentials'),
             ]);
         }
 
@@ -42,7 +42,7 @@ class AuthenticatedSessionController extends Controller
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => 'This account is not provisioned for the Aster payroll portal yet.',
+                'email' => __('ui.messages.login_not_provisioned'),
             ]);
         }
 

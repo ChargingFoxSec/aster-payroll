@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'company_id',
     'employee_id',
     'contract_id',
+    'compensation_amendment_id',
+    'payroll_batch_id',
     'attestation_type',
     'external_id',
     'tx_signature',
@@ -41,5 +43,15 @@ class Attestation extends Model
     public function contract(): BelongsTo
     {
         return $this->belongsTo(EmploymentContract::class, 'contract_id');
+    }
+
+    public function compensationAmendment(): BelongsTo
+    {
+        return $this->belongsTo(CompensationAmendment::class);
+    }
+
+    public function payrollBatch(): BelongsTo
+    {
+        return $this->belongsTo(PayrollBatch::class);
     }
 }

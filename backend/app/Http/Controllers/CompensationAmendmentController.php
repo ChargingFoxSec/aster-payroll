@@ -6,6 +6,7 @@ use App\Exceptions\UserFacingException;
 use App\Http\Requests\StoreCompensationAmendmentRequest;
 use App\Models\Employee;
 use App\Services\Payroll\CompensationAmountParser;
+use App\Services\Solana\PayrollAnchoringService;
 use Illuminate\Http\RedirectResponse;
 use Throwable;
 
@@ -15,6 +16,7 @@ class CompensationAmendmentController extends Controller
         StoreCompensationAmendmentRequest $request,
         Employee $employee,
         CompensationAmountParser $compensationAmountParser,
+        PayrollAnchoringService $payrollAnchoringService,
     ): RedirectResponse {
         $this->authorize('manage', $employee);
 
@@ -25,7 +27,7 @@ class CompensationAmendmentController extends Controller
         if (! $contract) {
             return redirect()
                 ->route('employees.show', $employee)
-                ->with('error', 'Upload a contract before recording compensation.');
+                ->with('error', __('ui.messages.compensation_contract_required'));
         }
 
         try {
@@ -35,7 +37,7 @@ class CompensationAmendmentController extends Controller
                 ->orderByDesc('id')
                 ->first();
 
-            $employee->compensationAmendments()->create([
+            $amendment = $employee->compensationAmendments()->create([
                 'company_id' => $company->id,
                 'contract_id' => $contract->id,
                 'previous_amount_minor' => $previousAmendment?->new_amount_minor,
@@ -44,22 +46,40 @@ class CompensationAmendmentController extends Controller
                 'effective_date' => $validated['effective_date'],
                 'reason' => $validated['reason'],
             ]);
-        } catch (UserFacingException $userFacingException) {
-            return redirect()
-                ->route('employees.show', $employee)
-                ->withInput()
-                ->with('error', $userFacingException->getMessage());
         } catch (Throwable $throwable) {
             report($throwable);
 
             return redirect()
                 ->route('employees.show', $employee)
                 ->withInput()
-                ->with('error', 'The compensation record could not be saved right now. Check the application logs and try again.');
+                ->with('error', __('ui.messages.compensation_store_failed'));
         }
+
+        $anchorWarning = $this->syncCompensationWarning($payrollAnchoringService, $amendment);
 
         return redirect()
             ->route('employees.show', $employee)
-            ->with('status', "Compensation update recorded for {$employee->full_name}.");
+            ->with(
+                'status',
+                trim(implode(' ', array_filter([
+                    __('ui.messages.compensation_recorded', ['employee' => $employee->full_name]),
+                    $anchorWarning,
+                ]))),
+            );
+    }
+
+    private function syncCompensationWarning(
+        PayrollAnchoringService $payrollAnchoringService,
+        \App\Models\CompensationAmendment $amendment,
+    ): ?string {
+        try {
+            return $payrollAnchoringService->syncCompensationAmendment($amendment);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return __('ui.messages.compensation_anchor_failed');
+        }
     }
 }

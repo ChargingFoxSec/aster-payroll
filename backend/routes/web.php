@@ -24,6 +24,16 @@ Route::get('/', function (Request $request) {
         : redirect()->route('portal.show');
 })->name('home');
 
+Route::post('/locale', function (Request $request) {
+    $validated = $request->validate([
+        'locale' => ['required', 'string', 'in:'.implode(',', array_keys(config('app.supported_locales', [])))],
+    ]);
+
+    $request->session()->put('locale', $validated['locale']);
+
+    return back();
+})->name('locale.update');
+
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])

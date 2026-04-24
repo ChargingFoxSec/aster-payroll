@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Employee;
+use App\Services\Employees\EmployeeOnboardingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class EmployeeController extends Controller
 {
@@ -35,14 +38,43 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function store(StoreEmployeeRequest $request): RedirectResponse
+    public function store(
+        StoreEmployeeRequest $request,
+        EmployeeOnboardingService $employeeOnboardingService,
+    ): RedirectResponse
     {
         $company = $this->currentCompany($request);
-        $employee = $company->employees()->create($request->validated());
 
-        return redirect()
-            ->route('employees.show', $employee)
-            ->with('status', 'Employee created. Upload a contract PDF to complete the first payroll record.');
+        try {
+            $result = $employeeOnboardingService->create($company, $request->validated());
+        } catch (ValidationException $validationException) {
+            throw $validationException;
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return redirect()
+                ->route('employees.create')
+                ->withInput()
+                ->with('error', __('ui.messages.employee_create_failed'));
+        }
+
+        $status = $result->portalProvisioned()
+            ? __('ui.messages.employee_created_with_portal')
+            : __('ui.messages.employee_created');
+
+        $response = redirect()
+            ->route('employees.show', $result->employee)
+            ->with('status', $status);
+
+        if ($result->portalProvisioned()) {
+            $response->with('provisioned_portal_account', [
+                'employee_name' => $result->employee->full_name,
+                'email' => $result->portalUser?->email,
+                'temporary_password' => $result->temporaryPassword,
+            ]);
+        }
+
+        return $response;
     }
 
     public function show(Request $request, Employee $employee): View
@@ -52,9 +84,12 @@ class EmployeeController extends Controller
         $company = $this->currentCompany($request);
 
         $employee->load([
-            'contracts' => fn ($query) => $query->latest('version'),
+            'user',
+            'contracts' => fn ($query) => $query
+                ->with('latestAttestation')
+                ->latest('version'),
             'compensationAmendments' => fn ($query) => $query
-                ->with('contract')
+                ->with(['contract', 'latestAttestation'])
                 ->orderByDesc('effective_date')
                 ->orderByDesc('id'),
             'payrollEntries' => fn ($query) => $query
@@ -64,9 +99,7 @@ class EmployeeController extends Controller
                 ->limit(5),
         ]);
 
-        $currentCompensation = $employee->compensationAmendments
-            ->first(fn ($amendment) => $amendment->effective_date->lte(now()->startOfDay()))
-            ?? $employee->compensationAmendments->first();
+        $currentCompensation = $employee->currentCompensation();
 
         return view('employees.show', [
             'company' => $company,
