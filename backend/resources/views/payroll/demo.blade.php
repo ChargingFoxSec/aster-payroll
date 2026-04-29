@@ -146,13 +146,28 @@
                     <p class="mt-3 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_account') }}</p>
                     <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $selectedBatch->anchor_batch_pubkey ?: __('ui.common.pending') }}</p>
 
-                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_anchor_tx') }}</p>
-                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->latestAnchorAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.entries_root') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->entries_root ?: __('ui.common.pending') }}</p>
 
-                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_executed_tx') }}</p>
-                    <p class="mt-1 break-all font-mono text-xs {{ $selectedBatch->latestExecutionAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
-                        {{ $selectedBatch->latestExecutionAttestation?->tx_signature ?: ($selectedBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_commit_tx') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.approval_root') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->approval_root ?: __('ui.common.pending') }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_approval_tx') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs {{ $selectedBatch->latestApprovalAttestation ? 'text-cyan-100' : 'text-stone-300' }}">{{ $selectedBatch->latestApprovalAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.settlement_root') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->settlement_root ?: ($selectedBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}</p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.batch_finalization_tx') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs {{ $selectedBatch->latestFinalizationAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
+                        {{ $selectedBatch->latestFinalizationAttestation?->tx_signature ?: ($selectedBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
                     </p>
+
+                    <p class="mt-4 text-xs uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.finalized_by') }}</p>
+                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $selectedBatch->finalized_by ?: __('ui.common.pending') }}</p>
                 </div>
 
                 <div class="mt-6 space-y-3">
@@ -180,6 +195,11 @@
                                 </div>
                             @endif
 
+                            @if ($execution?->prepared_payload_hash)
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.prepared_manifest_hash') }}</p>
+                                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $execution->prepared_payload_hash }}</p>
+                            @endif
+
                             @if ($execution?->approved_wallet_address)
                                 <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.approving_wallet') }}</p>
                                 <p class="mt-1 break-all font-mono text-xs text-sky-100">{{ $execution->approved_wallet_address }}</p>
@@ -188,6 +208,12 @@
                             @if ($execution?->tx_signature)
                                 <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.imported_tx_signature') }}</p>
                                 <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $execution->tx_signature }}</p>
+                                <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.receipt_verified_at') }}</p>
+                                <p class="mt-1 font-mono text-xs text-emerald-100">{{ optional($execution->receipt_verified_at)->toDateTimeString() ?: __('ui.common.pending') }}</p>
+                                @if ($execution->receipt_hash)
+                                    <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.receipt_hash') }}</p>
+                                    <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $execution->receipt_hash }}</p>
+                                @endif
                             @elseif ($entry->tx_signature)
                                 <p class="mt-3 text-[11px] uppercase tracking-[0.2em] text-stone-500">{{ __('ui.fields.entry_tx_signature') }}</p>
                                 <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $entry->tx_signature }}</p>

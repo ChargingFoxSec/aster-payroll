@@ -13,6 +13,17 @@ class EmployeeContractsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_employee_create_form_defaults_start_date_to_today(): void
+    {
+        $this->travelTo('2026-04-28 09:00:00');
+        $this->actingAsCompanyAdmin();
+
+        $this->get(route('employees.create'))
+            ->assertOk()
+            ->assertSee('name="start_date"', false)
+            ->assertSee('value="2026-04-28"', false);
+    }
+
     public function test_admin_can_create_an_employee(): void
     {
         $this->actingAsCompanyAdmin();
@@ -179,6 +190,31 @@ class EmployeeContractsTest extends TestCase
         Storage::disk('local')->assertExists($contract->file_path);
         $this->assertNull($contract->anchor_contract_pubkey);
         $this->assertSame([], $this->payrollAnchorClient()->calls);
+    }
+
+    public function test_contract_anchor_pending_warning_is_localized_when_session_locale_is_chinese(): void
+    {
+        Storage::fake('local');
+
+        $company = $this->demoCompany();
+        $this->actingAsCompanyAdmin($company);
+        $employee = $this->createEmployeeRecord($company, [
+            'full_name' => 'Rin Soto',
+            'email' => 'rin@example.com',
+            'start_date' => '2026-04-09',
+        ]);
+
+        $this->withSession(['locale' => 'zh_CN'])
+            ->post(route('employees.contracts.store', $employee), [
+                'title' => 'Rin Soto Employment Contract',
+                'effective_date' => '2026-04-13',
+                'status' => 'active',
+                'contract_pdf' => UploadedFile::fake()->createWithContent('contract.pdf', 'Aster Payroll employment contract v1'),
+            ])
+            ->assertRedirect(route('employees.show', $employee))
+            ->assertSessionHas('status', fn (string $status): bool => str_contains($status, '合同 v1 已上传并完成哈希。')
+                && str_contains($status, '员工钱包地址和基础薪酬记录可用后，系统才会进行链上合同锚定。')
+                && ! str_contains($status, 'Onchain contract anchoring is pending'));
     }
 
     public function test_contract_upload_stays_saved_when_anchor_sync_returns_a_user_facing_error(): void

@@ -17,7 +17,7 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('payroll-batches.store') }}" class="panel panel-soft p-6">
+            <form method="POST" action="{{ route('payroll-batches.store') }}" class="panel panel-soft p-6" data-payroll-batch-form>
                 @csrf
 
                 <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.payroll.create_batch_draft') }}</p>
@@ -29,12 +29,12 @@
                 <div class="mt-6 grid gap-5 md:grid-cols-2">
                     <label class="space-y-2">
                         <span class="text-sm text-stone-200">{{ __('ui.fields.payroll_period') }}</span>
-                        <input type="month" name="period" value="{{ old('period', $defaultPeriod) }}" class="app-field px-4 py-3" required>
+                        <input type="month" name="period" value="{{ old('period', $defaultPeriod) }}" class="app-field px-4 py-3" data-payroll-period-input required>
                     </label>
 
                     <label class="space-y-2">
                         <span class="text-sm text-stone-200">{{ __('ui.fields.due_date') }}</span>
-                        <input type="date" name="due_date" value="{{ old('due_date', $defaultDueDate) }}" class="app-field px-4 py-3" required>
+                        <input type="date" name="due_date" value="{{ old('due_date', $defaultDueDate) }}" class="app-field px-4 py-3" data-payroll-due-date-input required>
                     </label>
                 </div>
 
@@ -43,6 +43,46 @@
                 </button>
             </form>
         </div>
+
+        <form method="GET" action="{{ route('payroll-batches.index') }}" class="panel panel-soft p-5">
+            <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.payroll.filters') }}</p>
+            <div class="mt-4 grid gap-4 md:grid-cols-5">
+                <label class="space-y-2">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.payroll_period') }}</span>
+                    <input type="month" name="period" value="{{ $filters['period'] }}" class="app-field px-4 py-3">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.status') }}</span>
+                    <select name="status" class="app-field px-4 py-3">
+                        <option value="">{{ __('ui.common.all_statuses') }}</option>
+                        @foreach ($allowedStatuses as $status)
+                            <option value="{{ $status }}" @selected($filters['status'] === $status)>{{ __('ui.status.'.$status) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.employee') }}</span>
+                    <input type="search" name="employee" value="{{ $filters['employee'] }}" class="app-field px-4 py-3" placeholder="{{ __('ui.fields.employee_search') }}">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.due_state') }}</span>
+                    <select name="due_state" class="app-field px-4 py-3">
+                        <option value="">{{ __('ui.common.all_due_states') }}</option>
+                        @foreach ($allowedDueStates as $dueState)
+                            <option value="{{ $dueState }}" @selected($filters['due_state'] === $dueState)>{{ __('ui.common.'.$dueState) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-stone-200">{{ __('ui.fields.tx_or_root') }}</span>
+                    <input type="search" name="tx_or_root" value="{{ $filters['tx_or_root'] }}" class="app-field px-4 py-3" placeholder="{{ __('ui.fields.tx_or_root') }}">
+                </label>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+                <button type="submit" class="app-button app-button-secondary">{{ __('ui.actions.apply_filters') }}</button>
+                <a href="{{ route('payroll-batches.index') }}" class="app-button app-button-secondary">{{ __('ui.actions.clear_filters') }}</a>
+            </div>
+        </form>
 
         <div class="table-shell">
             <div class="grid grid-cols-[1.25fr,0.75fr,0.75fr,0.75fr,0.5fr] gap-4 border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">

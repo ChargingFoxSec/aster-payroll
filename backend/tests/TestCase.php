@@ -5,9 +5,11 @@ namespace Tests;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\Solana\ConfidentialTransferReceiptVerifier;
 use App\Services\Solana\PayrollAnchorClient;
 use App\Support\DemoCompany;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Tests\Fakes\FakeConfidentialTransferReceiptVerifier;
 use Tests\Fakes\FakePayrollAnchorClient;
 use Tests\Fakes\ThrowingPayrollAnchorClient;
 use Throwable;
@@ -16,12 +18,16 @@ abstract class TestCase extends BaseTestCase
 {
     protected FakePayrollAnchorClient $fakePayrollAnchorClient;
 
+    protected FakeConfidentialTransferReceiptVerifier $fakeConfidentialTransferReceiptVerifier;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->fakePayrollAnchorClient = new FakePayrollAnchorClient();
+        $this->fakePayrollAnchorClient = new FakePayrollAnchorClient;
+        $this->fakeConfidentialTransferReceiptVerifier = new FakeConfidentialTransferReceiptVerifier;
         $this->app->instance(PayrollAnchorClient::class, $this->fakePayrollAnchorClient);
+        $this->app->instance(ConfidentialTransferReceiptVerifier::class, $this->fakeConfidentialTransferReceiptVerifier);
     }
 
     protected function demoCompany(): Company
@@ -82,6 +88,11 @@ abstract class TestCase extends BaseTestCase
     protected function payrollAnchorClient(): FakePayrollAnchorClient
     {
         return $this->fakePayrollAnchorClient;
+    }
+
+    protected function confidentialTransferReceiptVerifier(): FakeConfidentialTransferReceiptVerifier
+    {
+        return $this->fakeConfidentialTransferReceiptVerifier;
     }
 
     protected function bindThrowingPayrollAnchorClient(Throwable $throwable): void

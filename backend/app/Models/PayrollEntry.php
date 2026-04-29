@@ -59,4 +59,9 @@ class PayrollEntry extends Model
     {
         return $this->hasOne(PayoutExecution::class);
     }
+
+    public function proof(): HasOne
+    {
+        return $this->hasOne(PayrollEntryProof::class);
+    }
 }

@@ -31,6 +31,10 @@ class PayrollBatchDraftService
                 'period_month' => $periodDate->month,
             ]);
 
+            if ($batch->exists && $batch->anchor_batch_pubkey !== null) {
+                throw new UserFacingException(__('ui.messages.payroll_batch_committed_and_frozen'));
+            }
+
             $batch->fill([
                 'currency' => $this->supportedCurrency(),
                 'due_date' => $dueDate->toDateString(),

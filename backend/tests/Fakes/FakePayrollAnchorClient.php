@@ -77,21 +77,23 @@ class FakePayrollAnchorClient implements PayrollAnchorClient
         );
     }
 
-    public function createPayrollBatch(
+    public function commitPayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
         Collection $entries,
-        string $batchHash,
+        string $entriesRoot,
+        int $entryCount,
     ): AnchorInstructionResult {
-        $this->maybeFail('createPayrollBatch');
+        $this->maybeFail('commitPayrollBatch');
         $this->batchCounter++;
         $this->calls[] = [
-            'name' => 'createPayrollBatch',
+            'name' => 'commitPayrollBatch',
             'payload' => [
                 'company_id' => $company->id,
                 'payroll_batch_id' => $payrollBatch->id,
-                'entry_count' => $entries->count(),
-                'batch_hash' => $batchHash,
+                'entry_count' => $entryCount,
+                'entries_count' => $entries->count(),
+                'entries_root' => $entriesRoot,
             ],
         ];
 
@@ -99,27 +101,58 @@ class FakePayrollAnchorClient implements PayrollAnchorClient
             companyPubkey: $this->token('CompanyPda', $company->id),
             accountPubkey: $this->token('BatchPda', $this->batchCounter),
             txSignature: $this->token('BatchTx', $this->batchCounter, 64),
+            authorityPubkey: $this->token('AuthorityPda', $company->id),
         );
     }
 
-    public function markPayrollBatchExecuted(
+    public function approvePayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
+        string $approvalRoot,
     ): AnchorInstructionResult {
-        $this->maybeFail('markPayrollBatchExecuted');
+        $this->maybeFail('approvePayrollBatch');
         $this->calls[] = [
-            'name' => 'markPayrollBatchExecuted',
+            'name' => 'approvePayrollBatch',
             'payload' => [
                 'company_id' => $company->id,
                 'payroll_batch_id' => $payrollBatch->id,
                 'anchor_batch_pubkey' => $payrollBatch->anchor_batch_pubkey,
+                'approval_root' => $approvalRoot,
             ],
         ];
 
         return new AnchorInstructionResult(
             companyPubkey: $this->token('CompanyPda', $company->id),
             accountPubkey: (string) $payrollBatch->anchor_batch_pubkey,
-            txSignature: $this->token('BatchExecutedTx', $payrollBatch->id, 64),
+            txSignature: $this->token('BatchApproveTx', $payrollBatch->id, 64),
+            authorityPubkey: $this->token('AuthorityPda', $company->id),
+            approvedAt: 1770000000 + $payrollBatch->id,
+        );
+    }
+
+    public function finalizePayrollBatch(
+        Company $company,
+        PayrollBatch $payrollBatch,
+        string $settlementRoot,
+    ): AnchorInstructionResult {
+        $this->maybeFail('finalizePayrollBatch');
+        $this->calls[] = [
+            'name' => 'finalizePayrollBatch',
+            'payload' => [
+                'company_id' => $company->id,
+                'payroll_batch_id' => $payrollBatch->id,
+                'anchor_batch_pubkey' => $payrollBatch->anchor_batch_pubkey,
+                'settlement_root' => $settlementRoot,
+            ],
+        ];
+
+        return new AnchorInstructionResult(
+            companyPubkey: $this->token('CompanyPda', $company->id),
+            accountPubkey: (string) $payrollBatch->anchor_batch_pubkey,
+            txSignature: $this->token('BatchFinalizeTx', $payrollBatch->id, 64),
+            authorityPubkey: $this->token('AuthorityPda', $company->id),
+            finalizedBy: $this->token('AuthorityPda', $company->id),
+            executedAt: 1770003600 + $payrollBatch->id,
         );
     }
 

@@ -5,9 +5,9 @@ namespace App\Services\Payroll;
 use App\Exceptions\UserFacingException;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\PayoutExecution;
 use App\Models\PayrollBatch;
 use App\Models\PayrollEntry;
-use App\Models\PayoutExecution;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
@@ -53,10 +53,15 @@ class ConfidentialPayrollService
         }
 
         $payrollBatch->loadMissing([
+            'latestFinalizationAttestation',
             'entries' => fn ($query) => $query
-                ->with(['employee', 'payrollBatch', 'payoutExecution'])
+                ->with(['employee', 'payrollBatch.latestApprovalAttestation', 'payoutExecution'])
                 ->orderBy('id'),
         ]);
+
+        if ($payrollBatch->latestFinalizationAttestation) {
+            throw new UserFacingException(__('ui.messages.payroll_batch_finalized_and_frozen'));
+        }
 
         if ($payrollBatch->entries->isEmpty()) {
             throw new UserFacingException(__('ui.messages.batch_has_no_entries'));
@@ -115,17 +120,28 @@ class ConfidentialPayrollService
             throw new UserFacingException(__('ui.messages.payroll_entry_already_imported_to_ledger'));
         }
 
+        if ($entry->payrollBatch?->latestApprovalAttestation && $execution->exists) {
+            if ($this->hasReusablePreparedPayload($execution)) {
+                return $execution->fresh(['company', 'employee', 'payrollEntry.payrollBatch']) ?? $execution;
+            }
+
+            throw new UserFacingException(__('ui.messages.payroll_batch_approved_and_frozen'));
+        }
+
         $execution->fill([
             'company_id' => $company->id,
             'employee_id' => $entry->employee_id,
             'approval_method' => PayoutExecution::APPROVAL_METHOD_LOCAL_SIGNER,
             'status' => PayoutExecution::STATUS_AWAITING_APPROVAL,
             'prepared_payload_path' => $execution->prepared_payload_path ?: '',
+            'prepared_payload_hash' => null,
             'receipt_path' => null,
+            'receipt_hash' => null,
             'approved_wallet_address' => null,
             'tx_signature' => null,
             'approved_at' => null,
             'imported_at' => null,
+            'receipt_verified_at' => null,
             'failure_reason' => null,
         ]);
         $execution->payrollEntry()->associate($entry);
@@ -148,9 +164,23 @@ class ConfidentialPayrollService
 
         $execution->forceFill([
             'prepared_payload_path' => $payloadPath,
+            'prepared_payload_hash' => hash('sha256', $payloadContents),
         ])->save();
 
         return $execution->fresh(['company', 'employee', 'payrollEntry.payrollBatch']);
+    }
+
+    private function hasReusablePreparedPayload(PayoutExecution $execution): bool
+    {
+        return is_string($execution->prepared_payload_path)
+            && $execution->prepared_payload_path !== ''
+            && is_string($execution->prepared_payload_hash)
+            && $execution->prepared_payload_hash !== ''
+            && Storage::disk('local')->exists($execution->prepared_payload_path)
+            && hash_equals(
+                $execution->prepared_payload_hash,
+                hash('sha256', Storage::disk('local')->get($execution->prepared_payload_path)),
+            );
     }
 
     /**
@@ -254,7 +284,7 @@ class ConfidentialPayrollService
             ],
             'network' => [
                 'rpc_url' => config('payroll.confidential.rpc_url'),
-                'token_program_id' => 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
+                'token_program_id' => config('payroll.confidential.token_program_id'),
             ],
             'company' => [
                 'id' => $execution->company->id,

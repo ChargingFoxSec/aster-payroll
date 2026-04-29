@@ -33,7 +33,7 @@
 
                 <label class="space-y-2">
                     <span class="text-sm text-stone-200">{{ __('ui.fields.start_date') }}</span>
-                    <input type="date" name="start_date" value="{{ old('start_date') }}" class="app-field px-4 py-3">
+                    <input type="date" name="start_date" value="{{ old('start_date', now()->toDateString()) }}" class="app-field px-4 py-3">
                 </label>
 
                 <label class="space-y-2">

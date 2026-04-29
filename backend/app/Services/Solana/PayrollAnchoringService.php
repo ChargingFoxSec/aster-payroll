@@ -2,17 +2,20 @@
 
 namespace App\Services\Solana;
 
+use App\Exceptions\UserFacingException;
 use App\Models\Attestation;
 use App\Models\CompensationAmendment;
 use App\Models\Employee;
 use App\Models\EmploymentContract;
 use App\Models\PayrollBatch;
-use Illuminate\Support\Collection;
+use App\Services\Payroll\PayrollBatchProofService;
+use Carbon\CarbonImmutable;
 
 class PayrollAnchoringService
 {
     public function __construct(
         private readonly PayrollAnchorClient $payrollAnchorClient,
+        private readonly PayrollBatchProofService $payrollBatchProofService,
     ) {}
 
     public function syncContract(EmploymentContract $contract): ?string
@@ -27,7 +30,7 @@ class PayrollAnchoringService
         $currentCompensationRef = $this->resolveCurrentCompensationRef($contract, $employee);
 
         if (! $this->canAnchorContract($employee, $currentCompensationRef)) {
-            return 'Onchain contract anchoring is pending until the employee wallet address and a baseline compensation record are available.';
+            return __('ui.messages.contract_anchor_pending_prerequisites');
         }
 
         $result = $this->payrollAnchorClient->createEmploymentContract(
@@ -97,13 +100,13 @@ class PayrollAnchoringService
         return null;
     }
 
-    public function syncPayrollBatch(PayrollBatch $payrollBatch): ?string
+    public function syncCommittedPayrollBatch(PayrollBatch $payrollBatch): ?string
     {
         $payrollBatch->loadMissing([
             'company',
             'entries.employee',
             'entries.compensationAmendment',
-            'latestAnchorAttestation',
+            'latestCommitAttestation',
         ]);
 
         $entries = $payrollBatch->entries
@@ -116,23 +119,38 @@ class PayrollAnchoringService
                 'currency' => $entry->currency,
                 'due_date' => $entry->due_date?->toDateString(),
             ]);
-        $batchHash = $this->hashPayload($entries->all());
+        try {
+            $proof = $this->payrollBatchProofService->commitProof($payrollBatch);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        }
 
         if ($payrollBatch->anchor_batch_pubkey) {
-            $latestAttestation = $payrollBatch->latestAnchorAttestation;
+            $latestAttestation = $payrollBatch->latestCommitAttestation;
 
-            if ($latestAttestation && $latestAttestation->payload_hash !== $batchHash) {
-                return 'This payroll batch was already anchored onchain; later local draft changes are not reflected in the current onchain batch account yet.';
+            if ($latestAttestation && $latestAttestation->payload_hash !== $proof['entries_root']) {
+                return __('ui.messages.payroll_batch_committed_and_frozen');
             }
+
+            $payrollBatch->forceFill([
+                'entry_count' => $proof['entry_count'],
+                'entries_root' => $proof['entries_root'],
+            ])->save();
 
             return null;
         }
 
-        $result = $this->payrollAnchorClient->createPayrollBatch(
+        $payrollBatch->forceFill([
+            'entry_count' => $proof['entry_count'],
+            'entries_root' => $proof['entries_root'],
+        ])->save();
+
+        $result = $this->payrollAnchorClient->commitPayrollBatch(
             $payrollBatch->company,
             $payrollBatch,
             $entries,
-            $batchHash,
+            $proof['entries_root'],
+            $proof['entry_count'],
         );
 
         $payrollBatch->forceFill([
@@ -142,35 +160,33 @@ class PayrollAnchoringService
         $this->upsertAttestation(
             payrollBatch: $payrollBatch,
             attributes: [
-                'attestation_type' => 'payroll_batch_anchor',
+                'attestation_type' => 'payroll_batch_commit',
                 'external_id' => $result->accountPubkey,
                 'tx_signature' => $result->txSignature,
-                'payload_hash' => $batchHash,
+                'payload_hash' => $proof['entries_root'],
             ],
         );
 
         return null;
     }
 
-    public function syncExecutedPayrollBatch(PayrollBatch $payrollBatch): ?string
+    public function syncApprovedPayrollBatch(PayrollBatch $payrollBatch): ?string
     {
         $payrollBatch->loadMissing([
             'company',
             'entries.employee',
             'entries.compensationAmendment',
-            'latestAnchorAttestation',
-            'latestExecutionAttestation',
+            'entries.payoutExecution',
+            'latestCommitAttestation',
+            'latestApprovalAttestation',
         ]);
 
-        if ($payrollBatch->status !== PayrollBatch::STATUS_EXECUTED) {
-            return null;
-        }
-
-        $anchorWarning = $this->syncPayrollBatch($payrollBatch);
+        $anchorWarning = $this->syncCommittedPayrollBatch($payrollBatch);
         $payrollBatch->refresh()->loadMissing([
             'company',
-            'latestAnchorAttestation',
-            'latestExecutionAttestation',
+            'entries.payoutExecution',
+            'latestCommitAttestation',
+            'latestApprovalAttestation',
         ]);
 
         if ($anchorWarning) {
@@ -178,28 +194,106 @@ class PayrollAnchoringService
         }
 
         if (! $payrollBatch->anchor_batch_pubkey) {
-            return __('ui.messages.payroll_batch_anchor_pending_after_reconcile');
+            return __('ui.messages.payroll_batch_commit_pending');
         }
 
-        if ($payrollBatch->latestExecutionAttestation) {
+        $proof = $this->payrollBatchProofService->approvalProof($payrollBatch);
+
+        if ($payrollBatch->latestApprovalAttestation) {
+            if ($payrollBatch->latestApprovalAttestation->payload_hash !== $proof['approval_root']) {
+                return __('ui.messages.payroll_batch_approval_root_mismatch');
+            }
+
             return null;
         }
 
-        $result = $this->payrollAnchorClient->markPayrollBatchExecuted(
+        $result = $this->payrollAnchorClient->approvePayrollBatch(
             $payrollBatch->company,
             $payrollBatch,
+            $proof['approval_root'],
         );
+
+        $payrollBatch->forceFill([
+            'approval_root' => $proof['approval_root'],
+            'approved_by' => $result->authorityPubkey,
+            'approved_at' => $this->chainTimestamp($result->approvedAt),
+        ])->save();
 
         $this->upsertAttestation(
             payrollBatch: $payrollBatch,
             attributes: [
-                'attestation_type' => 'payroll_batch_executed',
+                'attestation_type' => 'payroll_batch_approval',
                 'external_id' => $result->accountPubkey,
                 'tx_signature' => $result->txSignature,
-                'payload_hash' => $this->hashPayload([
-                    'status' => $payrollBatch->status,
-                    'executed_at' => $payrollBatch->executed_at?->toIso8601String(),
-                ]),
+                'payload_hash' => $proof['approval_root'],
+            ],
+        );
+
+        return null;
+    }
+
+    public function syncFinalizedPayrollBatch(PayrollBatch $payrollBatch): ?string
+    {
+        $payrollBatch->loadMissing([
+            'company',
+            'entries.employee',
+            'entries.compensationAmendment',
+            'entries.payoutExecution',
+            'latestCommitAttestation',
+            'latestApprovalAttestation',
+            'latestFinalizationAttestation',
+        ]);
+
+        if ($payrollBatch->status !== PayrollBatch::STATUS_EXECUTED) {
+            return null;
+        }
+
+        $approvalWarning = $this->syncApprovedPayrollBatch($payrollBatch);
+        $payrollBatch->refresh()->loadMissing([
+            'company',
+            'entries.payoutExecution',
+            'latestCommitAttestation',
+            'latestApprovalAttestation',
+            'latestFinalizationAttestation',
+        ]);
+
+        if ($approvalWarning) {
+            return $approvalWarning;
+        }
+
+        if (! $payrollBatch->anchor_batch_pubkey) {
+            return __('ui.messages.payroll_batch_commit_pending_after_reconcile');
+        }
+
+        $proof = $this->payrollBatchProofService->settlementProof($payrollBatch);
+
+        if ($payrollBatch->latestFinalizationAttestation) {
+            if ($payrollBatch->latestFinalizationAttestation->payload_hash !== $proof['settlement_root']) {
+                return __('ui.messages.payroll_batch_finalization_root_mismatch');
+            }
+
+            return null;
+        }
+
+        $result = $this->payrollAnchorClient->finalizePayrollBatch(
+            $payrollBatch->company,
+            $payrollBatch,
+            $proof['settlement_root'],
+        );
+
+        $payrollBatch->forceFill([
+            'settlement_root' => $proof['settlement_root'],
+            'finalized_by' => $result->finalizedBy ?? $result->authorityPubkey,
+            'executed_at' => $this->chainTimestamp($result->executedAt),
+        ])->save();
+
+        $this->upsertAttestation(
+            payrollBatch: $payrollBatch,
+            attributes: [
+                'attestation_type' => 'payroll_batch_finalization',
+                'external_id' => $result->accountPubkey,
+                'tx_signature' => $result->txSignature,
+                'payload_hash' => $proof['settlement_root'],
             ],
         );
 
@@ -264,6 +358,15 @@ class PayrollAnchoringService
     private function hashPayload(array $payload): string
     {
         return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function chainTimestamp(?int $timestamp): CarbonImmutable
+    {
+        if ($timestamp === null || $timestamp <= 0) {
+            throw new UserFacingException(__('ui.messages.anchor_batch_account_read_failed'));
+        }
+
+        return CarbonImmutable::createFromTimestampUTC($timestamp);
     }
 
     /**

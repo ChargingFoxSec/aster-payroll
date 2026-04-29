@@ -37,18 +37,28 @@ class ThrowingPayrollAnchorClient implements PayrollAnchorClient
         $this->fail();
     }
 
-    public function createPayrollBatch(
+    public function commitPayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
         Collection $entries,
-        string $batchHash,
+        string $entriesRoot,
+        int $entryCount,
     ): AnchorInstructionResult {
         $this->fail();
     }
 
-    public function markPayrollBatchExecuted(
+    public function approvePayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
+        string $approvalRoot,
+    ): AnchorInstructionResult {
+        $this->fail();
+    }
+
+    public function finalizePayrollBatch(
+        Company $company,
+        PayrollBatch $payrollBatch,
+        string $settlementRoot,
     ): AnchorInstructionResult {
         $this->fail();
     }

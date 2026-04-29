@@ -11,8 +11,9 @@ const PAY_CYCLE_BI_WEEKLY: u8 = 3;
 
 const CONTRACT_STATUS_ACTIVE: u8 = 1;
 
-const BATCH_STATUS_READY: u8 = 1;
-const BATCH_STATUS_EXECUTED: u8 = 2;
+const BATCH_STATUS_COMMITTED: u8 = 1;
+const BATCH_STATUS_APPROVED: u8 = 2;
+const BATCH_STATUS_FINALIZED: u8 = 3;
 
 #[program]
 pub mod aster_payroll {
@@ -98,16 +99,20 @@ pub mod aster_payroll {
         Ok(())
     }
 
-    pub fn create_payroll_batch(
-        ctx: Context<CreatePayrollBatch>,
-        args: CreatePayrollBatchArgs,
+    pub fn commit_payroll_batch(
+        ctx: Context<CommitPayrollBatch>,
+        args: CommitPayrollBatchArgs,
     ) -> Result<()> {
         require!(
             is_valid_payroll_period(args.period_year, args.period_month),
             PayrollError::InvalidPayrollPeriod
         );
         require!(
-            !is_zero_hash(&args.batch_hash),
+            args.entry_count > 0,
+            PayrollError::InvalidEntryCount
+        );
+        require!(
+            !is_zero_hash(&args.entries_root),
             PayrollError::InvalidReferenceHash
         );
 
@@ -116,25 +121,63 @@ pub mod aster_payroll {
         batch.company = ctx.accounts.company.key();
         batch.period_year = args.period_year;
         batch.period_month = args.period_month;
-        batch.batch_hash = args.batch_hash;
+        batch.entry_count = args.entry_count;
+        batch.entries_root = args.entries_root;
+        batch.approval_root = [0_u8; 32];
+        batch.settlement_root = [0_u8; 32];
+        batch.approved_by = Pubkey::default();
+        batch.finalized_by = Pubkey::default();
+        batch.approved_at = 0;
         batch.created_at = clock.unix_timestamp;
         batch.executed_at = 0;
-        batch.status = BATCH_STATUS_READY;
+        batch.status = BATCH_STATUS_COMMITTED;
         batch.bump = ctx.bumps.payroll_batch;
 
         Ok(())
     }
 
-    pub fn mark_payroll_batch_executed(ctx: Context<MarkPayrollBatchExecuted>) -> Result<()> {
+    pub fn approve_payroll_batch(
+        ctx: Context<ApprovePayrollBatch>,
+        args: ApprovePayrollBatchArgs,
+    ) -> Result<()> {
         require!(
-            ctx.accounts.payroll_batch.status == BATCH_STATUS_READY,
+            ctx.accounts.payroll_batch.status == BATCH_STATUS_COMMITTED,
             PayrollError::InvalidPayrollBatchState
+        );
+        require!(
+            !is_zero_hash(&args.approval_root),
+            PayrollError::InvalidReferenceHash
         );
 
         let clock = Clock::get()?;
         let batch = &mut ctx.accounts.payroll_batch;
-        batch.status = BATCH_STATUS_EXECUTED;
+        batch.approval_root = args.approval_root;
+        batch.approved_by = ctx.accounts.authority.key();
+        batch.approved_at = clock.unix_timestamp;
+        batch.status = BATCH_STATUS_APPROVED;
+
+        Ok(())
+    }
+
+    pub fn finalize_payroll_batch(
+        ctx: Context<FinalizePayrollBatch>,
+        args: FinalizePayrollBatchArgs,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.payroll_batch.status == BATCH_STATUS_APPROVED,
+            PayrollError::InvalidPayrollBatchState
+        );
+        require!(
+            !is_zero_hash(&args.settlement_root),
+            PayrollError::InvalidReferenceHash
+        );
+
+        let clock = Clock::get()?;
+        let batch = &mut ctx.accounts.payroll_batch;
+        batch.settlement_root = args.settlement_root;
+        batch.finalized_by = ctx.accounts.authority.key();
         batch.executed_at = clock.unix_timestamp;
+        batch.status = BATCH_STATUS_FINALIZED;
 
         Ok(())
     }
@@ -164,10 +207,21 @@ pub struct AmendCompensationArgs {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct CreatePayrollBatchArgs {
+pub struct CommitPayrollBatchArgs {
     pub period_year: u16,
     pub period_month: u8,
-    pub batch_hash: [u8; 32],
+    pub entry_count: u16,
+    pub entries_root: [u8; 32],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct ApprovePayrollBatchArgs {
+    pub approval_root: [u8; 32],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct FinalizePayrollBatchArgs {
+    pub settlement_root: [u8; 32],
 }
 
 #[derive(Accounts)]
@@ -244,8 +298,8 @@ pub struct AmendCompensation<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(args: CreatePayrollBatchArgs)]
-pub struct CreatePayrollBatch<'info> {
+#[instruction(args: CommitPayrollBatchArgs)]
+pub struct CommitPayrollBatch<'info> {
     #[account(
         seeds = [b"company", authority.key().as_ref()],
         bump = company.bump,
@@ -271,7 +325,23 @@ pub struct CreatePayrollBatch<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MarkPayrollBatchExecuted<'info> {
+pub struct ApprovePayrollBatch<'info> {
+    #[account(
+        seeds = [b"company", authority.key().as_ref()],
+        bump = company.bump,
+        has_one = authority @ PayrollError::Unauthorized
+    )]
+    pub company: Account<'info, CompanyAccount>,
+    #[account(
+        mut,
+        constraint = payroll_batch.company == company.key() @ PayrollError::CompanyMismatch
+    )]
+    pub payroll_batch: Account<'info, PayrollBatch>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct FinalizePayrollBatch<'info> {
     #[account(
         seeds = [b"company", authority.key().as_ref()],
         bump = company.bump,
@@ -337,7 +407,13 @@ pub struct PayrollBatch {
     pub company: Pubkey,
     pub period_year: u16,
     pub period_month: u8,
-    pub batch_hash: [u8; 32],
+    pub entry_count: u16,
+    pub entries_root: [u8; 32],
+    pub approval_root: [u8; 32],
+    pub settlement_root: [u8; 32],
+    pub approved_by: Pubkey,
+    pub finalized_by: Pubkey,
+    pub approved_at: i64,
     pub created_at: i64,
     pub executed_at: i64,
     pub status: u8,
@@ -345,7 +421,7 @@ pub struct PayrollBatch {
 }
 
 impl PayrollBatch {
-    pub const SPACE: usize = 8 + 32 + 2 + 1 + 32 + 8 + 8 + 1 + 1;
+    pub const SPACE: usize = 8 + 32 + 2 + 1 + 2 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
 }
 
 #[error_code]
@@ -368,9 +444,11 @@ pub enum PayrollError {
     InvalidReferenceHash,
     #[msg("Payroll period is invalid.")]
     InvalidPayrollPeriod,
+    #[msg("Payroll batch entry count must be greater than zero.")]
+    InvalidEntryCount,
     #[msg("The referenced company does not match the account relationship.")]
     CompanyMismatch,
-    #[msg("Payroll batch is not ready to be marked as executed.")]
+    #[msg("Payroll batch is in an invalid state for this action.")]
     InvalidPayrollBatchState,
 }
 

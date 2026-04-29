@@ -16,7 +16,7 @@
                     </div>
                     <div>
                         <p class="font-medium text-white">{{ __('ui.roles.employee') }}</p>
-                        <p class="mt-1 font-mono text-xs text-cyan-100">employee@aster.test / password</p>
+                        <p class="mt-1 font-mono text-xs text-cyan-100">alice.payroll.demo@aster.test / password</p>
                     </div>
                 </div>
             </div>

@@ -23,6 +23,7 @@ return [
 
     'confidential' => [
         'rpc_url' => env('ASTER_SOLANA_RPC_URL', 'http://aster-payroll-confidential-validator:8899'),
+        'token_program_id' => env('ASTER_TOKEN_2022_PROGRAM_ID', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
         'poc_script' => env('ASTER_CONFIDENTIAL_POC_SCRIPT', base_path('../onchain/scripts/confidential-payroll-poc.sh')),
         'work_dir' => env('ASTER_CONFIDENTIAL_POC_WORK_DIR', storage_path('app/private/payroll/confidential-poc')),
         'prepared_payload_dir' => env('ASTER_CONFIDENTIAL_PREPARED_PAYLOAD_DIR', 'payroll/prepared-payouts'),
@@ -31,5 +32,6 @@ return [
         'mint_amount' => (int) env('ASTER_CONFIDENTIAL_MINT_AMOUNT', 1000),
         'transfer_amount' => (int) env('ASTER_CONFIDENTIAL_TRANSFER_AMOUNT', 250),
         'timeout_seconds' => (int) env('ASTER_CONFIDENTIAL_TIMEOUT_SECONDS', 300),
+        'rpc_timeout_seconds' => (int) env('ASTER_CONFIDENTIAL_RPC_TIMEOUT_SECONDS', 10),
     ],
 ];

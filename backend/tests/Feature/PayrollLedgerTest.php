@@ -90,7 +90,83 @@ class PayrollLedgerTest extends TestCase
             ->assertSee('DemoConfidentialTransferSignature111111111111111111111111111111');
     }
 
-    private function demoReceipt(): array
+    public function test_admin_can_filter_payroll_batches_without_crossing_company_scope(): void
+    {
+        $company = $this->demoCompany();
+        $this->actingAsCompanyAdmin($company);
+
+        $ari = Employee::query()->create([
+            'company_id' => $company->id,
+            'full_name' => 'Ari Filter',
+            'email' => 'ari-filter@example.com',
+            'wallet_address' => null,
+            'employment_status' => 'active',
+            'start_date' => '2026-04-01',
+            'pay_cycle' => 'monthly',
+            'currency' => 'USDC',
+        ]);
+        $jules = Employee::query()->create([
+            'company_id' => $company->id,
+            'full_name' => 'Jules Filter',
+            'email' => 'jules-filter@example.com',
+            'wallet_address' => null,
+            'employment_status' => 'active',
+            'start_date' => '2026-04-01',
+            'pay_cycle' => 'monthly',
+            'currency' => 'USDC',
+        ]);
+
+        app(PayrollReceiptImportService::class)->importForEmployee(
+            $company,
+            $ari,
+            $this->demoReceipt('FilterAriTx111111111111111111111111111111111111'),
+            '2026-06-30',
+        );
+        app(PayrollReceiptImportService::class)->importForEmployee(
+            $company,
+            $jules,
+            $this->demoReceipt('FilterJulesTx11111111111111111111111111111111'),
+            '2026-07-31',
+        );
+
+        $overdueBatch = $company->payrollBatches()->create([
+            'period_year' => 2026,
+            'period_month' => 3,
+            'status' => 'overdue',
+            'total_amount_minor' => 10000,
+            'currency' => 'USDC',
+            'due_date' => now()->subDay()->toDateString(),
+        ]);
+        $overdueBatch->entries()->create([
+            'employee_id' => $ari->id,
+            'amount_minor' => 10000,
+            'currency' => 'USDC',
+            'status' => 'overdue',
+            'due_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->get(route('payroll-batches.index', ['period' => '2026-06']))
+            ->assertOk()
+            ->assertSee('2026-06')
+            ->assertDontSee('2026-07');
+
+        $this->get(route('payroll-batches.index', ['employee' => 'Jules']))
+            ->assertOk()
+            ->assertSee('2026-07')
+            ->assertDontSee('2026-06');
+
+        $this->get(route('payroll-batches.index', ['tx_or_root' => 'FilterAriTx']))
+            ->assertOk()
+            ->assertSee('2026-06')
+            ->assertDontSee('2026-07');
+
+        $this->get(route('payroll-batches.index', ['due_state' => 'overdue']))
+            ->assertOk()
+            ->assertSee('2026-03')
+            ->assertDontSee('2026-07');
+    }
+
+    private function demoReceipt(string $signature = 'DemoConfidentialTransferSignature111111111111111111111111111111'): array
     {
         return [
             'generated_at' => '2026-04-13T05:29:26Z',
@@ -105,7 +181,7 @@ class PayrollLedgerTest extends TestCase
                 'confidential_transfer_amount' => 250,
             ],
             'transactions' => [
-                'confidential_transfer' => 'DemoConfidentialTransferSignature111111111111111111111111111111',
+                'confidential_transfer' => $signature,
             ],
         ];
     }

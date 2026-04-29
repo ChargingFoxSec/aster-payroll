@@ -9,15 +9,18 @@ use App\Models\Employee;
 use App\Models\PayoutExecution;
 use App\Models\PayrollBatch;
 use App\Models\PayrollEntry;
+use App\Services\Solana\ConfidentialTransferReceiptVerifier;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class PayrollReceiptImportService
 {
     public function __construct(
         private readonly PayrollStatusService $payrollStatusService,
+        private readonly ConfidentialTransferReceiptVerifier $confidentialTransferReceiptVerifier,
     ) {}
 
     public function importForExecution(
@@ -25,10 +28,14 @@ class PayrollReceiptImportService
         array $receipt,
         ?string $receiptPath = null,
     ): PayrollEntry {
-        $execution->loadMissing(['company', 'employee', 'payrollEntry.payrollBatch']);
+        $execution->loadMissing(['company', 'employee', 'payrollEntry.payrollBatch.latestFinalizationAttestation']);
 
         if ($execution->isImported()) {
             throw new UserFacingException(__('ui.messages.payout_execution_already_imported'));
+        }
+
+        if ($execution->payrollEntry->payrollBatch->latestFinalizationAttestation) {
+            throw new UserFacingException(__('ui.messages.payroll_batch_finalized_and_frozen'));
         }
 
         $txSignature = trim((string) data_get($receipt, 'transactions.confidential_transfer', ''));
@@ -71,12 +78,17 @@ class PayrollReceiptImportService
             throw new UserFacingException(__('ui.messages.receipt_signer_mismatch'));
         }
 
+        $this->assertReceiptMatchesPreparedManifest($execution, $receipt);
+        $this->confidentialTransferReceiptVerifier->verify($execution, $receipt);
+        $receiptHash = $this->receiptHash($receipt, $receiptPath);
+
         return DB::transaction(function () use (
             $execution,
             $generatedAt,
             $txSignature,
             $approvedWalletAddress,
             $receiptPath,
+            $receiptHash,
         ): PayrollEntry {
             $entry = PayrollEntry::query()
                 ->with('payrollBatch')
@@ -103,10 +115,12 @@ class PayrollReceiptImportService
             $execution->forceFill([
                 'status' => PayoutExecution::STATUS_IMPORTED,
                 'receipt_path' => $receiptPath,
+                'receipt_hash' => $receiptHash,
                 'approved_wallet_address' => $approvedWalletAddress,
                 'tx_signature' => $txSignature,
                 'approved_at' => $generatedAt,
                 'imported_at' => now(),
+                'receipt_verified_at' => now(),
                 'failure_reason' => null,
             ])->save();
 
@@ -156,17 +170,20 @@ class PayrollReceiptImportService
                 );
             }
 
-            $batch = PayrollBatch::query()->updateOrCreate(
-                [
-                    'company_id' => $company->id,
-                    'period_year' => $dueDate->year,
-                    'period_month' => $dueDate->month,
-                ],
-                [
-                    'currency' => $supportedCurrency,
-                    'due_date' => $dueDate->toDateString(),
-                ],
-            );
+            $batch = PayrollBatch::query()->firstOrNew([
+                'company_id' => $company->id,
+                'period_year' => $dueDate->year,
+                'period_month' => $dueDate->month,
+            ]);
+
+            if ($batch->exists && $batch->anchor_batch_pubkey !== null) {
+                throw new UserFacingException(__('ui.messages.payroll_batch_committed_and_frozen'));
+            }
+
+            $batch->fill([
+                'currency' => $supportedCurrency,
+                'due_date' => $dueDate->toDateString(),
+            ])->save();
 
             $entry = PayrollEntry::query()->firstOrNew(
                 [
@@ -247,6 +264,55 @@ class PayrollReceiptImportService
         }
 
         return (int) round((float) $transferAmount * (10 ** $decimals));
+    }
+
+    private function assertReceiptMatchesPreparedManifest(PayoutExecution $execution, array $receipt): void
+    {
+        $expectedHash = $this->preparedManifestHash($execution);
+        $receiptHash = trim((string) (
+            data_get($receipt, 'approval.prepared_manifest_hash')
+            ?? data_get($receipt, 'artifacts.prepared_manifest_hash')
+            ?? ''
+        ));
+
+        if ($receiptHash === '') {
+            throw new UserFacingException(__('ui.messages.receipt_manifest_hash_missing'));
+        }
+
+        if (! hash_equals($expectedHash, $receiptHash)) {
+            throw new UserFacingException(__('ui.messages.receipt_manifest_hash_mismatch'));
+        }
+    }
+
+    private function preparedManifestHash(PayoutExecution $execution): string
+    {
+        $hash = trim((string) $execution->prepared_payload_hash);
+
+        if ($hash !== '') {
+            return $hash;
+        }
+
+        if (
+            is_string($execution->prepared_payload_path)
+            && $execution->prepared_payload_path !== ''
+            && Storage::disk('local')->exists($execution->prepared_payload_path)
+        ) {
+            $hash = hash('sha256', Storage::disk('local')->get($execution->prepared_payload_path));
+            $execution->forceFill(['prepared_payload_hash' => $hash])->save();
+
+            return $hash;
+        }
+
+        throw new UserFacingException(__('ui.messages.receipt_manifest_hash_missing'));
+    }
+
+    private function receiptHash(array $receipt, ?string $receiptPath): string
+    {
+        if (is_string($receiptPath) && $receiptPath !== '' && Storage::disk('local')->exists($receiptPath)) {
+            return hash('sha256', Storage::disk('local')->get($receiptPath));
+        }
+
+        return hash('sha256', json_encode($receipt, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     private function supportedCurrency(): string

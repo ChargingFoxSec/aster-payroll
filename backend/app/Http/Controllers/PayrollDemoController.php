@@ -39,8 +39,9 @@ class PayrollDemoController extends Controller
                 'entries' => fn ($query) => $query
                     ->with(['employee', 'payoutExecution.payrollEntry'])
                     ->orderBy('id'),
-                'latestAnchorAttestation',
-                'latestExecutionAttestation',
+                'latestCommitAttestation',
+                'latestApprovalAttestation',
+                'latestFinalizationAttestation',
             ]);
         }
 
@@ -55,6 +56,7 @@ class PayrollDemoController extends Controller
     public function prepare(
         PreparePayoutExecutionRequest $request,
         ConfidentialPayrollService $confidentialPayrollService,
+        PayrollAnchoringService $payrollAnchoringService,
     ): RedirectResponse {
         $company = $this->currentCompany($request);
         $validated = $request->validated();
@@ -79,14 +81,16 @@ class PayrollDemoController extends Controller
                 ->with('error', __('ui.messages.prepare_manifest_failed'));
         }
 
+        $approvalWarning = $this->syncApprovedBatchWarning($payrollAnchoringService, $batch->fresh());
+
         return redirect()
             ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
             ->with(
                 'status',
-                __('ui.messages.prepared_manifests', [
+                trim(__('ui.messages.prepared_manifests', [
                     'count' => $preparedExecutions->count(),
                     'period' => sprintf('%d-%02d', $batch->period_year, $batch->period_month),
-                ]),
+                ]).($approvalWarning ? " {$approvalWarning}" : '')),
             );
     }
 
@@ -134,10 +138,11 @@ class PayrollDemoController extends Controller
         }
 
         $batch = $entry->payrollBatch->fresh([
-            'latestAnchorAttestation',
-            'latestExecutionAttestation',
+            'latestCommitAttestation',
+            'latestApprovalAttestation',
+            'latestFinalizationAttestation',
         ]);
-        $executionWarning = $this->syncExecutedBatchWarning($payrollAnchoringService, $batch);
+        $executionWarning = $this->syncFinalizedBatchWarning($payrollAnchoringService, $batch);
         return redirect()
             ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
             ->with(
@@ -220,18 +225,33 @@ class PayrollDemoController extends Controller
         return $summaries;
     }
 
-    private function syncExecutedBatchWarning(
+    private function syncApprovedBatchWarning(
         PayrollAnchoringService $payrollAnchoringService,
         PayrollBatch $batch,
     ): ?string {
         try {
-            return $payrollAnchoringService->syncExecutedPayrollBatch($batch);
+            return $payrollAnchoringService->syncApprovedPayrollBatch($batch);
         } catch (UserFacingException $userFacingException) {
             return $userFacingException->getMessage();
         } catch (Throwable $throwable) {
             report($throwable);
 
-            return __('ui.messages.payroll_batch_execution_attestation_failed');
+            return __('ui.messages.payroll_batch_approval_attestation_failed');
+        }
+    }
+
+    private function syncFinalizedBatchWarning(
+        PayrollAnchoringService $payrollAnchoringService,
+        PayrollBatch $batch,
+    ): ?string {
+        try {
+            return $payrollAnchoringService->syncFinalizedPayrollBatch($batch);
+        } catch (UserFacingException $userFacingException) {
+            return $userFacingException->getMessage();
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return __('ui.messages.payroll_batch_finalization_attestation_failed');
         }
     }
 }

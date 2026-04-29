@@ -29,15 +29,23 @@ interface PayrollAnchorClient
     /**
      * @param  Collection<int, array<string, mixed>>  $entries
      */
-    public function createPayrollBatch(
+    public function commitPayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
         Collection $entries,
-        string $batchHash,
+        string $entriesRoot,
+        int $entryCount,
     ): AnchorInstructionResult;
 
-    public function markPayrollBatchExecuted(
+    public function approvePayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
+        string $approvalRoot,
+    ): AnchorInstructionResult;
+
+    public function finalizePayrollBatch(
+        Company $company,
+        PayrollBatch $payrollBatch,
+        string $settlementRoot,
     ): AnchorInstructionResult;
 }

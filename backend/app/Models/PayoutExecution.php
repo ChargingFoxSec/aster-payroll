@@ -14,11 +14,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'approval_method',
     'status',
     'prepared_payload_path',
+    'prepared_payload_hash',
     'receipt_path',
+    'receipt_hash',
     'approved_wallet_address',
     'tx_signature',
     'approved_at',
     'imported_at',
+    'receipt_verified_at',
     'failure_reason',
 ])]
 class PayoutExecution extends Model
@@ -38,6 +41,7 @@ class PayoutExecution extends Model
         return [
             'approved_at' => 'datetime',
             'imported_at' => 'datetime',
+            'receipt_verified_at' => 'datetime',
         ];
     }
 

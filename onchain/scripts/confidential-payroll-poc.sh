@@ -15,12 +15,16 @@ fi
 RPC_URL="${ASTER_SOLANA_RPC_URL:-${RPC_URL:-${DEFAULT_RPC_URL}}}"
 TOKEN_PROGRAM_ID="${ASTER_TOKEN_2022_PROGRAM_ID:-TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb}"
 MANIFEST_PATH="${ASTER_PAYOUT_MANIFEST:-}"
-COMPANY_OWNER_KEYPAIR="${ASTER_COMPANY_OWNER_KEYPAIR:-}"
+COMPANY_OWNER_KEYPAIR="${ASTER_COMPANY_OWNER_KEYPAIR:-${ASTER_ANCHOR_WALLET:-${ANCHOR_WALLET:-}}}"
 EMPLOYEE_OWNER_KEYPAIR="${ASTER_EMPLOYEE_OWNER_KEYPAIR:-${WORK_DIR}/employee-owner.json}"
 PAYER_KEYPAIR="${ASTER_PAYOUT_FEE_PAYER_KEYPAIR:-${WORK_DIR}/payer.json}"
 PAYER_CONFIG="${WORK_DIR}/payer-config.yml"
 COMPANY_OWNER_CONFIG="${WORK_DIR}/company-owner-config.yml"
 EMPLOYEE_OWNER_CONFIG="${WORK_DIR}/employee-owner-config.yml"
+
+if [[ -z "${COMPANY_OWNER_KEYPAIR}" && -f "${HOME}/.config/solana/id.json" ]]; then
+    COMPANY_OWNER_KEYPAIR="${HOME}/.config/solana/id.json"
+fi
 
 usage() {
     cat <<'EOF'
@@ -31,6 +35,7 @@ Usage:
 
 Optional environment variables:
   ASTER_SOLANA_RPC_URL
+  ASTER_ANCHOR_WALLET
   ASTER_CONFIDENTIAL_POC_DIR
   ASTER_CONFIDENTIAL_POC_OUTPUT
   ASTER_EMPLOYEE_OWNER_KEYPAIR
@@ -162,6 +167,7 @@ PAYROLL_BATCH_ID="$(jq -er '.execution.payroll_batch_id' "${MANIFEST_PATH}")"
 COMPANY_EXPECTED_WALLET="$(jq -r '.company.wallet_address // empty' "${MANIFEST_PATH}")"
 COMPANY_NAME="$(jq -r '.company.name // "Aster Payroll Demo Co."' "${MANIFEST_PATH}")"
 EMPLOYEE_NAME="$(jq -r '.employee.full_name // "Demo Employee"' "${MANIFEST_PATH}")"
+MANIFEST_HASH="$(sha256sum "${MANIFEST_PATH}" | awk '{print $1}')"
 
 MINT_AMOUNT="${ASTER_CONFIDENTIAL_MINT_AMOUNT:-$(jq -er '(.payroll.confidential_transfer_amount * 4) | floor' "${MANIFEST_PATH}")}"
 
@@ -323,6 +329,7 @@ jq -n \
     --arg rpc_url "${RPC_URL}" \
     --arg token_program_id "${TOKEN_PROGRAM_ID}" \
     --arg manifest_path "${MANIFEST_PATH}" \
+    --arg prepared_manifest_hash "${MANIFEST_HASH}" \
     --arg payer "${PAYER_PUBKEY}" \
     --arg company_owner "${COMPANY_OWNER_PUBKEY}" \
     --arg employee_owner "${EMPLOYEE_OWNER_PUBKEY}" \
@@ -366,7 +373,8 @@ jq -n \
             method: "local_signer",
             approving_wallet_address: $company_owner,
             approved_at: $generated_at,
-            manifest_path: $manifest_path
+            manifest_path: $manifest_path,
+            prepared_manifest_hash: $prepared_manifest_hash
         },
         actors: {
             payer: $payer,
@@ -402,6 +410,7 @@ jq -n \
             employee_public_balance: $employee_public_balance
         },
         artifacts: {
+            prepared_manifest_hash: $prepared_manifest_hash,
             work_dir: $work_dir,
             raw_logs_dir: $raw_logs_dir
         }

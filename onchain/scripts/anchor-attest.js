@@ -24,7 +24,7 @@ function requireCommand() {
 
   if (!command) {
     throw new Error(
-      "Usage: anchor-attest.js <create-employment-contract|amend-compensation|create-payroll-batch|mark-payroll-batch-executed>"
+      "Usage: anchor-attest.js <create-employment-contract|amend-compensation|commit-payroll-batch|approve-payroll-batch|finalize-payroll-batch>"
     );
   }
 
@@ -63,6 +63,10 @@ function hexToBytes(value, expectedLength) {
 
 function toBn(value) {
   return new anchor.BN(String(value));
+}
+
+function bnToNumber(value) {
+  return Number(value?.toString?.() ?? value ?? 0);
 }
 
 function toLeBytes(value, size) {
@@ -206,6 +210,7 @@ async function createEmploymentContract(program, authority, payload) {
     account_pubkey: contractPda.toBase58(),
     tx_signature: signature,
     company_initialization_tx_signature: initializationSignature,
+    authority_pubkey: authority.publicKey.toBase58(),
   };
 }
 
@@ -246,10 +251,11 @@ async function amendCompensation(program, authority, payload) {
     account_pubkey: amendmentPda.toBase58(),
     tx_signature: signature,
     company_initialization_tx_signature: initializationSignature,
+    authority_pubkey: authority.publicKey.toBase58(),
   };
 }
 
-async function createPayrollBatch(program, authority, payload) {
+async function commitPayrollBatch(program, authority, payload) {
   const { companyPda, initializationSignature } = await ensureCompany(
     program,
     authority,
@@ -269,10 +275,11 @@ async function createPayrollBatch(program, authority, payload) {
   );
 
   const signature = await program.methods
-    .createPayrollBatch({
+    .commitPayrollBatch({
       periodYear,
       periodMonth,
-      batchHash: hexToBytes(payload.batch.batch_hash, 32),
+      entryCount: Number(payload.batch.entry_count),
+      entriesRoot: hexToBytes(payload.batch.entries_root, 32),
     })
     .accounts({
       company: companyPda,
@@ -287,16 +294,12 @@ async function createPayrollBatch(program, authority, payload) {
     account_pubkey: batchPda.toBase58(),
     tx_signature: signature,
     company_initialization_tx_signature: initializationSignature,
+    authority_pubkey: authority.publicKey.toBase58(),
   };
 }
 
-async function markPayrollBatchExecuted(program, authority, payload) {
-  const { companyPda, initializationSignature } = await ensureCompany(
-    program,
-    authority,
-    payload
-  );
-  const batchPubkey = payload.batch.anchor_batch_pubkey
+function batchPubkeyFor(program, companyPda, payload) {
+  return payload.batch.anchor_batch_pubkey
     ? new PublicKey(payload.batch.anchor_batch_pubkey)
     : PublicKey.findProgramAddressSync(
         [
@@ -307,21 +310,66 @@ async function markPayrollBatchExecuted(program, authority, payload) {
         ],
         program.programId
       )[0];
+}
+
+async function approvePayrollBatch(program, authority, payload) {
+  const { companyPda, initializationSignature } = await ensureCompany(
+    program,
+    authority,
+    payload
+  );
+  const batchPubkey = batchPubkeyFor(program, companyPda, payload);
 
   const signature = await program.methods
-    .markPayrollBatchExecuted()
+    .approvePayrollBatch({
+      approvalRoot: hexToBytes(payload.batch.approval_root, 32),
+    })
     .accounts({
       company: companyPda,
       payrollBatch: batchPubkey,
       authority: authority.publicKey,
     })
     .rpc();
+  const batchAccount = await program.account.payrollBatch.fetch(batchPubkey);
 
   return {
     company_pubkey: companyPda.toBase58(),
     account_pubkey: batchPubkey.toBase58(),
     tx_signature: signature,
     company_initialization_tx_signature: initializationSignature,
+    authority_pubkey: authority.publicKey.toBase58(),
+    approved_at: bnToNumber(batchAccount.approvedAt),
+  };
+}
+
+async function finalizePayrollBatch(program, authority, payload) {
+  const { companyPda, initializationSignature } = await ensureCompany(
+    program,
+    authority,
+    payload
+  );
+  const batchPubkey = batchPubkeyFor(program, companyPda, payload);
+
+  const signature = await program.methods
+    .finalizePayrollBatch({
+      settlementRoot: hexToBytes(payload.batch.settlement_root, 32),
+    })
+    .accounts({
+      company: companyPda,
+      payrollBatch: batchPubkey,
+      authority: authority.publicKey,
+    })
+    .rpc();
+  const batchAccount = await program.account.payrollBatch.fetch(batchPubkey);
+
+  return {
+    company_pubkey: companyPda.toBase58(),
+    account_pubkey: batchPubkey.toBase58(),
+    tx_signature: signature,
+    company_initialization_tx_signature: initializationSignature,
+    authority_pubkey: authority.publicKey.toBase58(),
+    finalized_by: batchAccount.finalizedBy.toBase58(),
+    executed_at: bnToNumber(batchAccount.executedAt),
   };
 }
 
@@ -362,11 +410,14 @@ async function main() {
     case "amend-compensation":
       result = await amendCompensation(program, authority, payload);
       break;
-    case "create-payroll-batch":
-      result = await createPayrollBatch(program, authority, payload);
+    case "commit-payroll-batch":
+      result = await commitPayrollBatch(program, authority, payload);
       break;
-    case "mark-payroll-batch-executed":
-      result = await markPayrollBatchExecuted(program, authority, payload);
+    case "approve-payroll-batch":
+      result = await approvePayrollBatch(program, authority, payload);
+      break;
+    case "finalize-payroll-batch":
+      result = await finalizePayrollBatch(program, authority, payload);
       break;
     default:
       throw new Error(`Unsupported command: ${command}`);

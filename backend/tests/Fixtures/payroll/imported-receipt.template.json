@@ -9,7 +9,8 @@
     "method": "local_signer",
     "approving_wallet_address": "AdminWallet111111111111111111111111111111111",
     "approved_at": "2026-04-30T10:15:00Z",
-    "manifest_path": "/tmp/prepared-payout.json"
+    "manifest_path": "/tmp/prepared-payout.json",
+    "prepared_manifest_hash": "__PREPARED_MANIFEST_HASH__"
   },
   "network": {
     "rpc_url": "http://aster-payroll-confidential-validator:8899",
@@ -32,5 +33,8 @@
   },
   "balances": {
     "employee_public_balance": "0"
+  },
+  "artifacts": {
+    "prepared_manifest_hash": "__PREPARED_MANIFEST_HASH__"
   }
 }

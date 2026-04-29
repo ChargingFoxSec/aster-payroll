@@ -25,6 +25,7 @@
                     <div class="meta-chip px-4 py-3 text-xs text-stone-300">
                         <p>{{ __('ui.fields.status') }}: <span class="text-white">{{ __('ui.status.'.$payrollBatch->status) }}</span></p>
                         <p class="mt-1">{{ __('ui.fields.due_date') }}: <span class="text-white">{{ $payrollBatch->due_date->toDateString() }}</span></p>
+                        <p class="mt-1">{{ __('ui.fields.approved_at') }}: <span class="text-white">{{ optional($payrollBatch->approved_at)->toDateTimeString() ?: __('ui.common.not_set') }}</span></p>
                         <p class="mt-1">{{ __('ui.fields.executed_at') }}: <span class="text-white">{{ optional($payrollBatch->executed_at)->toDateTimeString() ?: __('ui.common.not_set') }}</span></p>
                     </div>
 
@@ -41,8 +42,8 @@
                     <p class="mt-2 text-sm text-stone-300">{{ $payrollBatch->currency }}</p>
                 </div>
                 <div class="metric-tile">
-                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.common.entries') }}</p>
-                    <p class="mt-3 text-3xl font-semibold text-white">{{ $payrollBatch->entries->count() }}</p>
+                    <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.fields.entry_count') }}</p>
+                    <p class="mt-3 text-3xl font-semibold text-white">{{ $payrollBatch->entry_count ?: $payrollBatch->entries->count() }}</p>
                 </div>
                 <div class="metric-tile">
                     <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.payroll.paid_entries') }}</p>
@@ -59,12 +60,22 @@
                 <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.payroll.anchor_traceability') }}</p>
                 <p class="mt-3">{{ __('ui.fields.batch_account') }}</p>
                 <p class="mt-1 break-all font-mono text-xs text-cyan-100">{{ $payrollBatch->anchor_batch_pubkey ?: __('ui.common.pending') }}</p>
-                <p class="mt-4">{{ __('ui.fields.anchor_tx') }}</p>
-                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->latestAnchorAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
-                <p class="mt-4">{{ __('ui.fields.batch_executed_tx') }}</p>
-                <p class="mt-1 break-all font-mono text-xs {{ $payrollBatch->latestExecutionAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
-                    {{ $payrollBatch->latestExecutionAttestation?->tx_signature ?: ($payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
+                <p class="mt-4">{{ __('ui.fields.entries_root') }}</p>
+                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->entries_root ?: __('ui.common.pending') }}</p>
+                <p class="mt-4">{{ __('ui.fields.batch_commit_tx') }}</p>
+                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                <p class="mt-4">{{ __('ui.fields.approval_root') }}</p>
+                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->approval_root ?: __('ui.common.pending') }}</p>
+                <p class="mt-4">{{ __('ui.fields.batch_approval_tx') }}</p>
+                <p class="mt-1 break-all font-mono text-xs {{ $payrollBatch->latestApprovalAttestation ? 'text-cyan-100' : 'text-stone-300' }}">{{ $payrollBatch->latestApprovalAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                <p class="mt-4">{{ __('ui.fields.settlement_root') }}</p>
+                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->settlement_root ?: ($payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}</p>
+                <p class="mt-4">{{ __('ui.fields.batch_finalization_tx') }}</p>
+                <p class="mt-1 break-all font-mono text-xs {{ $payrollBatch->latestFinalizationAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
+                    {{ $payrollBatch->latestFinalizationAttestation?->tx_signature ?: ($payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
                 </p>
+                <p class="mt-4">{{ __('ui.fields.finalized_by') }}</p>
+                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->finalized_by ?: __('ui.common.pending') }}</p>
             </div>
         </div>
 

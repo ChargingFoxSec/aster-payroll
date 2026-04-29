@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Services\Payroll\ConfidentialPayrollService;
+use App\Services\Payroll\PayrollBatchDraftService;
 use App\Services\Payroll\PayrollReceiptImportService;
+use App\Services\Solana\PayrollAnchoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -49,6 +51,8 @@ class AuthAndAuthorizationTest extends TestCase
             ->assertOk()
             ->assertSee('Language')
             ->assertSee('English')
+            ->assertSee('alice.payroll.demo@aster.test / password')
+            ->assertDontSee('employee@aster.test / password')
             ->assertDontSee('href="'.route('login').'"', false);
     }
 
@@ -270,6 +274,52 @@ class AuthAndAuthorizationTest extends TestCase
             ->assertDontSee('OtherTransferSignature11111111111111111111111111111');
     }
 
+    public function test_employee_payroll_page_only_surfaces_their_own_verification_proof_metadata(): void
+    {
+        $company = $this->demoCompany();
+        $employee = $this->createEmployeeWithCompensation($company, [
+            'full_name' => 'Proof Self User',
+            'email' => 'proof-self@example.com',
+        ], 250000);
+        $otherEmployee = $this->createEmployeeWithCompensation($company, [
+            'full_name' => 'Proof Other User',
+            'email' => 'proof-other@example.com',
+        ], 310000);
+
+        $batch = app(PayrollBatchDraftService::class)->createOrRefresh(
+            $company,
+            '2026-04',
+            '2026-04-30',
+        );
+        app(PayrollAnchoringService::class)->syncCommittedPayrollBatch($batch);
+
+        $batch->refresh()->load(['entries.employee', 'entries.proof']);
+        $ownEntry = $batch->entries->firstWhere('employee_id', $employee->id);
+        $otherEntry = $batch->entries->firstWhere('employee_id', $otherEmployee->id);
+
+        $this->assertNotNull($ownEntry?->proof);
+        $this->assertNotNull($otherEntry?->proof);
+
+        $this->actingAsEmployeeUser($employee, [
+            'email' => 'proof-self@example.com',
+        ]);
+
+        $this->get(route('portal.payroll'))
+            ->assertOk()
+            ->assertSee(__('ui.pages.employees.verification_proof'))
+            ->assertSee(__('ui.common.verified'))
+            ->assertSee($ownEntry->proof->leaf_hash)
+            ->assertSee(json_encode($ownEntry->proof->proof_path, JSON_UNESCAPED_SLASHES))
+            ->assertSee($ownEntry->proof->amount_commitment_hash)
+            ->assertSee($ownEntry->proof->amount_nonce)
+            ->assertSee($batch->entries_root)
+            ->assertSee($batch->anchor_batch_pubkey)
+            ->assertDontSee($otherEntry->proof->leaf_hash)
+            ->assertDontSee($otherEntry->proof->amount_commitment_hash)
+            ->assertDontSee($otherEntry->proof->amount_nonce)
+            ->assertDontSee('Proof Other User');
+    }
+
     public function test_employee_portal_uses_the_latest_effective_compensation_instead_of_a_future_amendment(): void
     {
         $company = $this->demoCompany();
@@ -365,6 +415,7 @@ class AuthAndAuthorizationTest extends TestCase
             'generated_at' => '2026-04-30T10:15:00Z',
             'approval' => [
                 'approving_wallet_address' => $otherCompany->wallet_address,
+                'prepared_manifest_hash' => $execution->prepared_payload_hash,
             ],
             'payroll' => [
                 'amount_minor' => 190000,

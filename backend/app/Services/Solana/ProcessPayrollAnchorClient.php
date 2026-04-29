@@ -58,34 +58,54 @@ class ProcessPayrollAnchorClient implements PayrollAnchorClient
         ], __('ui.messages.anchor_compensation_amendment_failed'));
     }
 
-    public function createPayrollBatch(
+    public function commitPayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
         Collection $entries,
-        string $batchHash,
+        string $entriesRoot,
+        int $entryCount,
     ): AnchorInstructionResult {
-        return $this->runInstruction('create-payroll-batch', [
+        return $this->runInstruction('commit-payroll-batch', [
             'company' => $this->companyPayload($company),
             'batch' => [
                 'period_year' => $payrollBatch->period_year,
                 'period_month' => $payrollBatch->period_month,
-                'batch_hash' => $batchHash,
+                'entry_count' => $entryCount,
+                'entries_root' => $entriesRoot,
             ],
-        ], __('ui.messages.anchor_payroll_batch_failed'));
+        ], __('ui.messages.anchor_commit_payroll_batch_failed'));
     }
 
-    public function markPayrollBatchExecuted(
+    public function approvePayrollBatch(
         Company $company,
         PayrollBatch $payrollBatch,
+        string $approvalRoot,
     ): AnchorInstructionResult {
-        return $this->runInstruction('mark-payroll-batch-executed', [
+        return $this->runInstruction('approve-payroll-batch', [
             'company' => $this->companyPayload($company),
             'batch' => [
                 'period_year' => $payrollBatch->period_year,
                 'period_month' => $payrollBatch->period_month,
                 'anchor_batch_pubkey' => $payrollBatch->anchor_batch_pubkey,
+                'approval_root' => $approvalRoot,
             ],
-        ], __('ui.messages.anchor_mark_payroll_batch_executed_failed'));
+        ], __('ui.messages.anchor_approve_payroll_batch_failed'));
+    }
+
+    public function finalizePayrollBatch(
+        Company $company,
+        PayrollBatch $payrollBatch,
+        string $settlementRoot,
+    ): AnchorInstructionResult {
+        return $this->runInstruction('finalize-payroll-batch', [
+            'company' => $this->companyPayload($company),
+            'batch' => [
+                'period_year' => $payrollBatch->period_year,
+                'period_month' => $payrollBatch->period_month,
+                'anchor_batch_pubkey' => $payrollBatch->anchor_batch_pubkey,
+                'settlement_root' => $settlementRoot,
+            ],
+        ], __('ui.messages.anchor_finalize_payroll_batch_failed'));
     }
 
     /**
@@ -138,6 +158,10 @@ class ProcessPayrollAnchorClient implements PayrollAnchorClient
         $accountPubkey = trim((string) data_get($decoded, 'account_pubkey', ''));
         $txSignature = trim((string) data_get($decoded, 'tx_signature', ''));
         $companyInitializationTxSignature = data_get($decoded, 'company_initialization_tx_signature');
+        $authorityPubkey = data_get($decoded, 'authority_pubkey');
+        $finalizedBy = data_get($decoded, 'finalized_by');
+        $approvedAt = data_get($decoded, 'approved_at');
+        $executedAt = data_get($decoded, 'executed_at');
 
         if ($companyPubkey === '' || $accountPubkey === '' || $txSignature === '') {
             throw new UserFacingException($failureMessage);
@@ -150,6 +174,14 @@ class ProcessPayrollAnchorClient implements PayrollAnchorClient
             companyInitializationTxSignature: is_string($companyInitializationTxSignature) && $companyInitializationTxSignature !== ''
                 ? $companyInitializationTxSignature
                 : null,
+            authorityPubkey: is_string($authorityPubkey) && $authorityPubkey !== ''
+                ? $authorityPubkey
+                : null,
+            finalizedBy: is_string($finalizedBy) && $finalizedBy !== ''
+                ? $finalizedBy
+                : null,
+            approvedAt: is_numeric($approvedAt) ? (int) $approvedAt : null,
+            executedAt: is_numeric($executedAt) ? (int) $executedAt : null,
         );
     }
 

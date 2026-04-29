@@ -22,6 +22,7 @@ TOKEN_2022_PROGRAM_SO_IN_CONTAINER="/workspaces/frontiers-hackathon${TOKEN_2022_
 ASTER_PAYROLL_PROGRAM_SO="${ASTER_ANCHOR_PROGRAM_SO:-${ROOT_DIR}/onchain/target/deploy/aster_payroll.so}"
 ASTER_PAYROLL_PROGRAM_SO_IN_CONTAINER="/workspaces/frontiers-hackathon${ASTER_PAYROLL_PROGRAM_SO#"${ROOT_DIR}"}"
 LEDGER_DIR_IN_CONTAINER="${ASTER_CONFIDENTIAL_LEDGER_DIR_IN_CONTAINER:-/tmp/aster-confidential-ledger}"
+LEDGER_SHRED_LIMIT="${ASTER_CONFIDENTIAL_LEDGER_SHRED_LIMIT:-500000}"
 
 if [[ ! -f "${TOKEN_2022_PROGRAM_SO}" ]]; then
     "${ROOT_DIR}/scripts/build-token-2022-program.sh"
@@ -79,6 +80,7 @@ docker run \
         socat "TCP-LISTEN:${WS_PROXY_PORT},fork,reuseaddr,bind=0.0.0.0" TCP:127.0.0.1:8900 &
         exec "${VALIDATOR_BIN}" \
             --ledger "'"${LEDGER_DIR_IN_CONTAINER}"'" \
+            --limit-ledger-size "'"${LEDGER_SHRED_LIMIT}"'" \
             --bpf-program '"${TOKEN_2022_PROGRAM_ID}"' '"${TOKEN_2022_PROGRAM_SO_IN_CONTAINER}"' \
             --bpf-program '"${ASTER_PAYROLL_PROGRAM_ID}"' '"${ASTER_PAYROLL_PROGRAM_SO_IN_CONTAINER}"''
 
