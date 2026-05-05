@@ -12,6 +12,7 @@ CONTAINER_RPC_PROXY_PORT="${ASTER_CONFIDENTIAL_CONTAINER_RPC_PROXY_PORT:-18899}"
 CONTAINER_WS_PROXY_PORT="${ASTER_CONFIDENTIAL_CONTAINER_WS_PROXY_PORT:-18900}"
 DOCKER_NETWORK="${ASTER_CONFIDENTIAL_DOCKER_NETWORK:-${DOCKER_PROJECT_NAME}_default}"
 NETWORK_ALIAS="${ASTER_CONFIDENTIAL_NETWORK_ALIAS:-aster-payroll-confidential-validator}"
+CONTAINER_CPUS="${ASTER_CONFIDENTIAL_CPUS-0.25}"
 TOKEN_2022_PROGRAM_ID="${ASTER_TOKEN_2022_PROGRAM_ID:-TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb}"
 ASTER_PAYROLL_PROGRAM_ID="${ASTER_ANCHOR_PROGRAM_ID:-4SZ4Fdt4pYurKjtdfEkHvRm9zZ2uTnHmdkGFrQxp1EhE}"
 AGAVE_VERSION="${ASTER_AGAVE_VERSION:-v3.1.12}"
@@ -39,6 +40,11 @@ if [[ ! -f "${ASTER_PAYROLL_PROGRAM_SO}" ]]; then
     exit 1
 fi
 
+DOCKER_RESOURCE_ARGS=()
+if [[ -n "${CONTAINER_CPUS}" ]]; then
+    DOCKER_RESOURCE_ARGS+=(--cpus "${CONTAINER_CPUS}")
+fi
+
 docker build \
     --platform linux/arm64 \
     --build-arg "AGAVE_VERSION=${AGAVE_VERSION}" \
@@ -58,6 +64,7 @@ docker run \
     --publish "${HOST_WS_PORT}:${CONTAINER_WS_PROXY_PORT}" \
     --security-opt seccomp=unconfined \
     --ulimit memlock=-1:-1 \
+    "${DOCKER_RESOURCE_ARGS[@]}" \
     --volume "${ROOT_DIR}:/workspaces/frontiers-hackathon" \
     --workdir /workspaces/frontiers-hackathon/onchain \
     "${IMAGE_NAME}" \
@@ -90,6 +97,9 @@ for _ in $(seq 1 "${READINESS_RETRIES}"); do
         echo "RPC: http://127.0.0.1:${HOST_RPC_PORT}"
         echo "WS:  ws://127.0.0.1:${HOST_WS_PORT}"
         echo "App container RPC: http://${NETWORK_ALIAS}:8899"
+        if [[ -n "${CONTAINER_CPUS}" ]]; then
+            echo "CPU limit: ${CONTAINER_CPUS} cores (set ASTER_CONFIDENTIAL_CPUS= to disable, or raise it for faster tests)"
+        fi
         exit 0
     fi
 

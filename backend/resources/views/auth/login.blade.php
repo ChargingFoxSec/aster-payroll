@@ -1,8 +1,10 @@
 <x-layouts.app :title="__('ui.pages.login.title')">
     <section class="mx-auto max-w-5xl grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
         <div class="panel panel-hero p-6">
-            <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.login.kicker') }}</p>
-            <h2 class="mt-2 text-3xl font-semibold text-white">{{ __('ui.pages.login.heading') }}</h2>
+            @if (__('ui.pages.login.kicker') !== '')
+                <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.login.kicker') }}</p>
+            @endif
+            <h2 class="text-3xl font-semibold text-white">{{ __('ui.pages.login.heading') }}</h2>
             <p class="mt-3 text-sm leading-6 text-stone-300">
                 {{ __('ui.pages.login.copy') }}
             </p>

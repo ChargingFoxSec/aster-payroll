@@ -25,12 +25,28 @@
                 {{ __('ui.pages.demo.copy') }}
             </p>
 
-            <div class="panel-inset mt-6 p-4 text-sm text-stone-300">
+            <div class="panel-inset settlement-flow mt-6 text-sm text-stone-300">
                 <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.pages.demo.operator_boundary') }}</p>
-                <p class="mt-2 leading-6">
+                <p class="mt-2 leading-6 text-stone-300">
                     {{ __('ui.pages.demo.operator_copy') }}
                 </p>
-                <p class="mt-4 text-xs text-stone-400">
+                <div class="settlement-flow-steps mt-5">
+                    @foreach ([
+                        ['number' => '1', 'title' => __('ui.pages.demo.flow_draft_title'), 'copy' => __('ui.pages.demo.flow_draft_copy')],
+                        ['number' => '2', 'title' => __('ui.pages.demo.flow_prepare_title'), 'copy' => __('ui.pages.demo.flow_prepare_copy')],
+                        ['number' => '3', 'title' => __('ui.pages.demo.flow_sign_title'), 'copy' => __('ui.pages.demo.flow_sign_copy')],
+                        ['number' => '4', 'title' => __('ui.pages.demo.flow_import_title'), 'copy' => __('ui.pages.demo.flow_import_copy')],
+                    ] as $flowStep)
+                        <div class="settlement-flow-step">
+                            <span class="settlement-flow-number">{{ $flowStep['number'] }}</span>
+                            <div>
+                                <p class="font-semibold text-white">{{ $flowStep['title'] }}</p>
+                                <p class="mt-1 text-xs leading-5 text-stone-400">{{ $flowStep['copy'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <p class="mt-5 text-xs leading-5 text-stone-400">
                     {{ __('ui.pages.demo.operator_note') }}
                 </p>
             </div>

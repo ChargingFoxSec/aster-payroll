@@ -355,7 +355,55 @@ body.app-theme::before {
 .table-shell > table,
 .table-shell > .grid,
 .table-shell > .divide-y > article {
+    width: 100%;
     min-width: 48rem;
+}
+
+.settlement-flow {
+    padding: 1rem;
+}
+
+.settlement-flow-steps {
+    display: grid;
+    gap: 1rem;
+}
+
+.settlement-flow-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.settlement-flow-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--app-ink);
+    border-radius: 999px;
+    background: var(--app-ink);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+@media (min-width: 768px) {
+    .settlement-flow-steps {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .settlement-flow-step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 1rem;
+        right: -0.55rem;
+        width: 1.1rem;
+        border-top: 1px solid var(--app-border);
+    }
 }
 
 .table-shell thead,

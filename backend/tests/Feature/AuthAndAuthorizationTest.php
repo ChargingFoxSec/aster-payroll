@@ -427,7 +427,7 @@ class AuthAndAuthorizationTest extends TestCase
 
         $this->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('No payout execution has been prepared yet.')
+            ->assertSee('No settlement record has been prepared yet.')
             ->assertDontSee('OtherCompanyDashboardTransferSignature11111111111');
     }
 

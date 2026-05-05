@@ -147,9 +147,9 @@ class EmployeeContractsTest extends TestCase
             ])
             ->assertRedirect(route('employees.create'))
             ->assertSessionHasErrors([
-                'full_name' => '姓名为必填项。',
-                'email' => '邮箱格式不正确。',
-                'currency' => '币种必须是以下值之一：USDC。',
+                'full_name' => '请填写姓名。',
+                'email' => '请输入有效的邮箱。',
+                'currency' => '币种 必须是以下值之一：USDC。',
             ]);
     }
 
@@ -212,8 +212,8 @@ class EmployeeContractsTest extends TestCase
                 'contract_pdf' => UploadedFile::fake()->createWithContent('contract.pdf', 'Aster Payroll employment contract v1'),
             ])
             ->assertRedirect(route('employees.show', $employee))
-            ->assertSessionHas('status', fn (string $status): bool => str_contains($status, '合同 v1 已上传并完成哈希。')
-                && str_contains($status, '员工钱包地址和基础薪酬记录可用后，系统才会进行链上合同锚定。')
+            ->assertSessionHas('status', fn (string $status): bool => str_contains($status, '合同 v1 已上传，哈希已生成。')
+                && str_contains($status, '员工钱包地址和基础薪酬记录齐备后，系统才会执行链上合同锚定。')
                 && ! str_contains($status, 'Onchain contract anchoring is pending'));
     }
 

@@ -3,17 +3,13 @@
         <div class="grid gap-6 lg:grid-cols-[1fr,0.9fr]">
             <div class="panel panel-hero p-6">
                 <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.payroll.ledger_kicker') }}</p>
-                <div class="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div class="mt-3">
                     <div>
                         <h2 class="text-3xl font-semibold text-white">{{ $company->name }}</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-stone-300">
                             {{ __('ui.pages.payroll.ledger_copy') }}
                         </p>
                     </div>
-
-                    <a href="{{ route('payroll-demo.show') }}" class="app-button app-button-primary">
-                        {{ __('ui.actions.open_batch_settlement_lab') }}
-                    </a>
                 </div>
             </div>
 
