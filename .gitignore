@@ -37,7 +37,10 @@ onchain/.confidential-ledger/
 
 # agent
 .agents/
+.claude/
 skills-lock.json
 AGENTS.md
 AGENTS.*.md
-docs/
+docs/*
+!docs/
+!docs/**/*.md

@@ -1,7 +1,8 @@
 .anchor
+.artifacts/
 .DS_Store
-target
-node_modules
-dist
 build
+dist
+node_modules/
 test-ledger
+target/

@@ -220,7 +220,7 @@ class ConfidentialPayrollService
 
     public function relativeScriptPath(): string
     {
-        return './onchain/scripts/confidential-payroll-poc.sh';
+        return 'cd onchain && yarn signer';
     }
 
     /**
@@ -312,11 +312,10 @@ class ConfidentialPayrollService
                 'helper_script' => $this->relativeScriptPath(),
             ],
             'instructions' => [
-                'summary' => 'Run the local confidential-transfer helper outside Laravel, using an admin-controlled company signer.',
+                'summary' => 'Run the Anchor-side confidential-transfer signer outside Laravel, using an admin-controlled company signer.',
                 'example_command' => sprintf(
-                    'ASTER_PAYOUT_MANIFEST=/path/to/%s ASTER_COMPANY_OWNER_KEYPAIR=/absolute/path/to/admin-company-wallet.json %s',
+                    'cd onchain && ASTER_PAYOUT_MANIFEST=/path/to/%s ASTER_COMPANY_OWNER_KEYPAIR=/absolute/path/to/admin-company-wallet.json yarn signer',
                     $this->manifestDownloadName($execution),
-                    $this->relativeScriptPath(),
                 ),
             ],
         ];

@@ -62,7 +62,7 @@ class PayoutExecutionFlowTest extends TestCase
                 "payout-execution-{$execution->id}-manifest.json",
                 data_get($preparedPayload, 'artifacts.manifest_download_name'),
             );
-            $this->assertSame('./onchain/scripts/confidential-payroll-poc.sh', data_get($preparedPayload, 'artifacts.helper_script'));
+            $this->assertSame('cd onchain && yarn signer', data_get($preparedPayload, 'artifacts.helper_script'));
             $this->assertStringNotContainsString((string) storage_path(), json_encode($preparedPayload));
             $this->assertStringNotContainsString('/workspaces/frontiers-hackathon', json_encode($preparedPayload));
             $this->assertSame(
