@@ -50,6 +50,10 @@ class PayrollReceiptImportService
             ?? data_get($receipt, 'generated_at'),
         );
 
+        if ($txSignature === '' && $this->looksLikePreparedManifestUpload($receipt)) {
+            throw new UserFacingException(__('ui.messages.receipt_upload_is_manifest'));
+        }
+
         if ($txSignature === '') {
             throw new UserFacingException(__('ui.messages.receipt_missing_confidential_transfer_signature'));
         }
@@ -282,6 +286,13 @@ class PayrollReceiptImportService
         if (! hash_equals($expectedHash, $receiptHash)) {
             throw new UserFacingException(__('ui.messages.receipt_manifest_hash_mismatch'));
         }
+    }
+
+    private function looksLikePreparedManifestUpload(array $receipt): bool
+    {
+        return data_get($receipt, 'artifacts.manifest_download_name') !== null
+            || data_get($receipt, 'artifacts.receipt_file_hint') !== null
+            || data_get($receipt, 'instructions.example_command') !== null;
     }
 
     private function preparedManifestHash(PayoutExecution $execution): string

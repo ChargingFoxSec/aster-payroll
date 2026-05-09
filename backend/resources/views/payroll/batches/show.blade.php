@@ -80,17 +80,17 @@
         </div>
 
         <div class="table-shell">
-            <div class="grid grid-cols-[1fr,0.75fr,0.75fr,1.25fr,0.5fr] gap-4 border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
+            <div class="payroll-batch-entry-grid border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
                 <span>{{ __('ui.fields.employee') }}</span>
                 <span>{{ __('ui.fields.amount') }}</span>
                 <span>{{ __('ui.fields.status') }}</span>
                 <span>{{ __('ui.fields.tx_signature') }}</span>
-                <span></span>
+                <span class="text-right">{{ __('ui.fields.actions') }}</span>
             </div>
 
-            <div class="divide-y divide-white/10">
+            <div>
                 @foreach ($payrollBatch->entries as $entry)
-                    <article class="grid gap-4 px-6 py-5 lg:grid-cols-[1fr,0.75fr,0.75fr,1.25fr,0.5fr] lg:items-center">
+                    <article class="payroll-batch-entry-grid payroll-batch-entry-row px-6 py-5">
                         <div>
                             <p class="text-lg font-medium text-white">{{ $entry->employee->full_name }}</p>
                             <p class="mt-1 text-sm text-stone-400">{{ $entry->employee->email }}</p>
@@ -111,7 +111,9 @@
                             @endif
                         </div>
                         <p class="break-all font-mono text-xs {{ $entry->tx_signature ? 'text-cyan-100' : 'text-stone-500' }}">{{ $entry->tx_signature ?: __('ui.common.not_set_yet') }}</p>
-                        <a href="{{ route('employees.payroll.show', $entry->employee) }}" class="inline-link text-sm">{{ __('ui.actions.statement') }}</a>
+                        <a href="{{ route('employees.payroll.show', $entry->employee) }}" class="app-button app-button-secondary app-button-compact justify-self-end">
+                            {{ __('ui.actions.statement') }}
+                        </a>
                     </article>
                 @endforeach
             </div>

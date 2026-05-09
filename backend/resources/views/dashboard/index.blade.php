@@ -1,5 +1,5 @@
 <x-layouts.app :title="__('ui.pages.dashboard.title')">
-    <section class="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+    <section class="space-y-6">
         <div class="panel panel-hero p-6">
             <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.dashboard.kicker') }}</p>
             <h2 class="mt-3 text-3xl font-semibold text-white">{{ $company->name }}</h2>

@@ -1,5 +1,5 @@
 <x-layouts.app :title="__('ui.pages.employees.create_title')">
-    <section class="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+    <section class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <form method="POST" action="{{ route('employees.store') }}" class="panel panel-hero p-6">
             @csrf
 

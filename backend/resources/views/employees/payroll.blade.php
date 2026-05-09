@@ -17,7 +17,7 @@
         </div>
 
         <div class="table-shell">
-            <div class="grid grid-cols-[0.85fr,0.85fr,0.75fr,1.55fr] gap-4 border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
+            <div class="grid grid-cols-[0.85fr_0.85fr_0.75fr_1.55fr] gap-4 border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
                 <span>{{ __('ui.common.batch') }}</span>
                 <span>{{ __('ui.fields.amount') }}</span>
                 <span>{{ __('ui.fields.status') }}</span>
@@ -28,7 +28,7 @@
                 @forelse ($employee->payrollEntries as $entry)
                     @php($displayStatus = $entry->paid_at ? 'paid' : ($entry->due_date->isPast() ? 'overdue' : $entry->status))
                     <article class="space-y-4 px-6 py-5">
-                        <div class="grid gap-4 lg:grid-cols-[0.85fr,0.85fr,0.75fr,1.55fr] lg:items-center">
+                        <div class="grid gap-4 lg:grid-cols-[0.85fr_0.85fr_0.75fr_1.55fr] lg:items-center">
                             <div>
                                 <p class="text-lg font-medium text-white">{{ $entry->payrollBatch->period_year }}-{{ str_pad((string) $entry->payrollBatch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
                                 <p class="mt-1 text-sm text-stone-400">{{ __('ui.common.due') }} {{ $entry->due_date->toDateString() }}</p>

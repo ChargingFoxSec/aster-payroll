@@ -15,9 +15,18 @@
         $failedExecutions = $executions->filter(
             fn ($execution) => $execution->status === \App\Models\PayoutExecution::STATUS_FAILED
         );
+        $importableExecutions = $executions->filter(
+            fn ($execution) => in_array($execution->status, [
+                \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL,
+                \App\Models\PayoutExecution::STATUS_FAILED,
+            ], true)
+        );
+        $batchOptionLabel = fn (\App\Models\PayrollBatch $batch): string => sprintf('%d-%02d', $batch->period_year, $batch->period_month)
+            .' · '.__('ui.status.'.$batch->status)
+            .' · '.$batch->entries_count.' '.__('ui.common.entries');
     @endphp
 
-    <section class="grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+    <section class="space-y-6">
         <div class="panel panel-hero p-6">
             <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.demo.kicker') }}</p>
             <h2 class="mt-2 text-3xl font-semibold text-white">{{ __('ui.pages.demo.heading') }}</h2>
@@ -53,20 +62,34 @@
 
             <form method="POST" action="{{ route('payroll-demo.prepare') }}" class="mt-6">
                 @csrf
+                <input type="hidden" name="payroll_batch_id" value="{{ old('payroll_batch_id', $selectedBatch?->id) }}">
                 <div class="space-y-5">
                     <label class="block space-y-2">
                         <span class="text-sm text-stone-200">{{ __('ui.fields.payroll_batch') }}</span>
-                        <select name="payroll_batch_id" class="app-field px-4 py-3" required>
-                            @forelse ($batches as $batch)
-                                <option value="{{ $batch->id }}" @selected((int) old('payroll_batch_id', $selectedBatch?->id) === $batch->id)>
-                                    {{ $batch->period_year }}-{{ str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT) }}
-                                    · {{ __('ui.status.'.$batch->status) }}
-                                    · {{ $batch->entries_count }} {{ __('ui.common.entries') }}
-                                </option>
-                            @empty
-                                <option value="">{{ __('ui.pages.demo.draft_first') }}</option>
-                            @endforelse
-                        </select>
+                        @if ($selectedBatch)
+                            <details class="batch-jump-menu">
+                                <summary class="batch-jump-trigger app-field px-4 py-3">
+                                    <span>{{ $batchOptionLabel($selectedBatch) }}</span>
+                                    <span class="batch-jump-caret" aria-hidden="true">v</span>
+                                </summary>
+                                <div class="batch-jump-options">
+                                    @foreach ($batches as $batch)
+                                        <a
+                                            href="{{ route('payroll-demo.show', ['payroll_batch_id' => $batch->id]) }}"
+                                            @class([
+                                                'batch-jump-option',
+                                                'batch-jump-option-active' => $selectedBatch->id === $batch->id,
+                                            ])
+                                            @if ($selectedBatch->id === $batch->id) aria-current="page" @endif
+                                        >
+                                            {{ $batchOptionLabel($batch) }}
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @else
+                            <div class="app-field px-4 py-3 text-stone-500">{{ __('ui.pages.demo.draft_first') }}</div>
+                        @endif
                     </label>
                 </div>
 
@@ -86,11 +109,12 @@
                     <label class="block space-y-2">
                         <span class="text-sm text-stone-200">{{ __('ui.fields.prepared_payout') }}</span>
                         <select name="payout_execution_id" class="app-field px-4 py-3" required>
-                            @forelse ($awaitingApprovalExecutions as $execution)
+                            @forelse ($importableExecutions as $execution)
                                 <option value="{{ $execution->id }}">
                                     #{{ $execution->id }}
                                     · {{ $execution->employee->full_name }}
                                     · {{ number_format($execution->payrollEntry->amount_minor / 100, 2) }} {{ $execution->payrollEntry->currency }}
+                                    · {{ __('ui.status.'.$execution->status) }}
                                 </option>
                             @empty
                                 <option value="">{{ __('ui.pages.demo.no_prepared') }}</option>
@@ -104,7 +128,7 @@
                     </label>
                 </div>
 
-                <button type="submit" @disabled($awaitingApprovalExecutions->isEmpty()) class="app-button app-button-amber mt-6">
+                <button type="submit" @disabled($importableExecutions->isEmpty()) class="app-button app-button-amber mt-6">
                     {{ __('ui.actions.import_receipt') }}
                 </button>
             </form>
@@ -121,7 +145,7 @@
             <p class="text-xs uppercase tracking-[0.35em] text-amber-200/70">{{ __('ui.pages.demo.progress') }}</p>
 
             @if ($selectedBatch)
-                <div class="mt-4 flex flex-wrap items-start justify-between gap-4">
+                <div class="mt-5 flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <p class="text-xs uppercase tracking-[0.25em] text-stone-500">{{ __('ui.fields.focused_batch') }}</p>
                         <p class="mt-2 text-2xl font-semibold text-white">

@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Exceptions\UserFacingException;
 use App\Http\Requests\ImportPayoutReceiptRequest;
 use App\Http\Requests\PreparePayoutExecutionRequest;
-use App\Models\PayrollBatch;
 use App\Models\PayoutExecution;
+use App\Models\PayrollBatch;
 use App\Services\Payroll\ConfidentialPayrollService;
 use App\Services\Payroll\PayrollReceiptImportService;
 use App\Services\Solana\PayrollAnchoringService;
@@ -57,7 +57,7 @@ class PayrollDemoController extends Controller
         PreparePayoutExecutionRequest $request,
         ConfidentialPayrollService $confidentialPayrollService,
         PayrollAnchoringService $payrollAnchoringService,
-    ): RedirectResponse {
+    ): RedirectResponse|StreamedResponse {
         $company = $this->currentCompany($request);
         $validated = $request->validated();
         $batch = $company->payrollBatches()->findOrFail($validated['payroll_batch_id']);
@@ -67,6 +67,7 @@ class PayrollDemoController extends Controller
                 $company,
                 $batch,
             );
+            $zipContents = $confidentialPayrollService->manifestZipForExecutions($preparedExecutions);
         } catch (UserFacingException $userFacingException) {
             return redirect()
                 ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
@@ -82,16 +83,21 @@ class PayrollDemoController extends Controller
         }
 
         $approvalWarning = $this->syncApprovedBatchWarning($payrollAnchoringService, $batch->fresh());
+        $request->session()->flash(
+            'status',
+            trim(__('ui.messages.prepared_manifests', [
+                'count' => $preparedExecutions->count(),
+                'period' => sprintf('%d-%02d', $batch->period_year, $batch->period_month),
+            ]).($approvalWarning ? " {$approvalWarning}" : '')),
+        );
 
-        return redirect()
-            ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
-            ->with(
-                'status',
-                trim(__('ui.messages.prepared_manifests', [
-                    'count' => $preparedExecutions->count(),
-                    'period' => sprintf('%d-%02d', $batch->period_year, $batch->period_month),
-                ]).($approvalWarning ? " {$approvalWarning}" : '')),
-            );
+        return response()->streamDownload(
+            static function () use ($zipContents): void {
+                echo $zipContents;
+            },
+            $confidentialPayrollService->manifestZipDownloadName($batch),
+            ['Content-Type' => 'application/zip'],
+        );
     }
 
     public function import(
@@ -143,6 +149,7 @@ class PayrollDemoController extends Controller
             'latestFinalizationAttestation',
         ]);
         $executionWarning = $this->syncFinalizedBatchWarning($payrollAnchoringService, $batch);
+
         return redirect()
             ->route('payroll-demo.show', ['payroll_batch_id' => $batch->id])
             ->with(

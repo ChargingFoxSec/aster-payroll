@@ -40,9 +40,13 @@ class PayoutExecutionFlowTest extends TestCase
             ->with('entries')
             ->firstOrFail();
 
-        $this->post(route('payroll-demo.prepare'), [
+        $prepareResponse = $this->post(route('payroll-demo.prepare'), [
             'payroll_batch_id' => $batch->id,
-        ])->assertRedirect(route('payroll-demo.show', ['payroll_batch_id' => $batch->id]));
+        ]);
+
+        $prepareResponse
+            ->assertOk()
+            ->assertDownload("payroll-batch-{$batch->id}-2026-04-payout-manifests.zip");
 
         $executions = PayoutExecution::query()
             ->with(['payrollEntry.payrollBatch', 'employee'])
@@ -50,6 +54,7 @@ class PayoutExecutionFlowTest extends TestCase
             ->get();
 
         $this->assertCount(2, $executions);
+        $zipContents = $prepareResponse->streamedContent();
 
         foreach ($executions as $execution) {
             Storage::disk('local')->assertExists($execution->prepared_payload_path);
@@ -63,11 +68,23 @@ class PayoutExecutionFlowTest extends TestCase
                 data_get($preparedPayload, 'artifacts.manifest_download_name'),
             );
             $this->assertSame('cd onchain && yarn signer', data_get($preparedPayload, 'artifacts.helper_script'));
+            $this->assertStringContainsString(
+                "ASTER_CONFIDENTIAL_POC_OUTPUT=/path/to/execution-{$execution->id}-receipt.json",
+                (string) data_get($preparedPayload, 'instructions.example_command'),
+            );
             $this->assertStringNotContainsString((string) storage_path(), json_encode($preparedPayload));
             $this->assertStringNotContainsString('/workspaces/frontiers-hackathon', json_encode($preparedPayload));
             $this->assertSame(
                 hash('sha256', Storage::disk('local')->get($execution->prepared_payload_path)),
                 $execution->prepared_payload_hash,
+            );
+            $this->assertStringContainsString(
+                "payout-execution-{$execution->id}-manifest.json",
+                $zipContents,
+            );
+            $this->assertStringContainsString(
+                sprintf('"execution_id": %d', $execution->id),
+                $zipContents,
             );
         }
 
@@ -170,6 +187,81 @@ class PayoutExecutionFlowTest extends TestCase
         ]);
     }
 
+    public function test_failed_payout_execution_stays_selectable_for_receipt_retry(): void
+    {
+        Storage::fake('local');
+
+        $company = $this->demoCompany();
+        $this->actingAsCompanyAdmin($company);
+        $this->createEmployeeWithCompensation($company->id, 'Retry User', 'retry@example.com', 210000);
+
+        $this->post(route('payroll-batches.store'), [
+            'period' => '2026-04',
+            'due_date' => '2026-04-30',
+        ]);
+
+        $batch = PayrollBatch::query()->firstOrFail();
+
+        $this->post(route('payroll-demo.prepare'), [
+            'payroll_batch_id' => $batch->id,
+        ]);
+
+        $execution = PayoutExecution::query()->with('payrollEntry')->firstOrFail();
+        $receiptUpload = UploadedFile::fake()->createWithContent(
+            "payout-execution-{$execution->id}-manifest.json",
+            Storage::disk('local')->get($execution->prepared_payload_path),
+        );
+
+        $this->post(route('payroll-demo.import'), [
+            'payout_execution_id' => $execution->id,
+            'receipt' => $receiptUpload,
+        ])
+            ->assertRedirect(route('payroll-demo.show', ['payroll_batch_id' => $batch->id]))
+            ->assertSessionHas('error', __('ui.messages.receipt_upload_is_manifest'));
+
+        $execution->refresh();
+        $this->assertSame(PayoutExecution::STATUS_FAILED, $execution->status);
+
+        $this->get(route('payroll-demo.show', ['payroll_batch_id' => $batch->id]))
+            ->assertOk()
+            ->assertSee('value="'.$execution->id.'"', false)
+            ->assertSee("#{$execution->id}")
+            ->assertSee(__('ui.status.failed'));
+    }
+
+    public function test_payroll_demo_batch_menu_renders_direct_jump_links(): void
+    {
+        $company = $this->demoCompany();
+        $this->actingAsCompanyAdmin($company);
+        $this->createEmployeeWithCompensation($company->id, 'Jump User', 'jump@example.com', 210000);
+
+        $this->post(route('payroll-batches.store'), [
+            'period' => '2026-04',
+            'due_date' => '2026-04-30',
+        ]);
+
+        $this->post(route('payroll-batches.store'), [
+            'period' => '2026-05',
+            'due_date' => '2026-05-31',
+        ]);
+
+        $firstBatch = PayrollBatch::query()
+            ->where('period_month', 4)
+            ->firstOrFail();
+        $secondBatch = PayrollBatch::query()
+            ->where('period_month', 5)
+            ->firstOrFail();
+
+        $response = $this->get(route('payroll-demo.show', ['payroll_batch_id' => $firstBatch->id]));
+
+        $response->assertOk();
+
+        $this->assertSame(
+            1,
+            substr_count($response->getContent(), 'href="'.route('payroll-demo.show', ['payroll_batch_id' => $secondBatch->id]).'"'),
+        );
+    }
+
     public function test_solana_receipt_verifier_accepts_confirmed_token_2022_transaction_path(): void
     {
         $tokenProgramId = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
@@ -256,7 +348,9 @@ class PayoutExecutionFlowTest extends TestCase
 
         $this->post(route('payroll-demo.prepare'), [
             'payroll_batch_id' => $batch->id,
-        ])->assertRedirect(route('payroll-demo.show', ['payroll_batch_id' => $batch->id]));
+        ])
+            ->assertOk()
+            ->assertDownload("payroll-batch-{$batch->id}-2026-04-payout-manifests.zip");
 
         $executions = PayoutExecution::query()->orderBy('id')->get();
         $this->assertCount(2, $executions);

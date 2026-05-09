@@ -1,5 +1,5 @@
 <x-layouts.app :title="__('ui.pages.login.title')">
-    <section class="mx-auto max-w-5xl grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+    <section class="mx-auto max-w-5xl grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div class="panel panel-hero p-6">
             @if (__('ui.pages.login.kicker') !== '')
                 <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.login.kicker') }}</p>

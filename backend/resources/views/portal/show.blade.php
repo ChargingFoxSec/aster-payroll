@@ -1,5 +1,5 @@
 <x-layouts.app :title="__('ui.pages.portal.title')">
-    <section class="grid gap-6 lg:grid-cols-[1.05fr,0.95fr]">
+    <section class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div class="space-y-6">
             <div class="panel panel-hero p-6">
                 <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.portal.self_service') }}</p>

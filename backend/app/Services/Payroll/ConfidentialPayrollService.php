@@ -9,6 +9,7 @@ use App\Models\PayoutExecution;
 use App\Models\PayrollBatch;
 use App\Models\PayrollEntry;
 use Carbon\CarbonImmutable;
+use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -213,6 +214,51 @@ class ConfidentialPayrollService
         return "payout-execution-{$execution->id}-manifest.json";
     }
 
+    public function manifestZipDownloadName(PayrollBatch $payrollBatch): string
+    {
+        return sprintf(
+            'payroll-batch-%d-%04d-%02d-payout-manifests.zip',
+            $payrollBatch->id,
+            $payrollBatch->period_year,
+            $payrollBatch->period_month,
+        );
+    }
+
+    /**
+     * @param  Collection<int, PayoutExecution>  $executions
+     */
+    public function manifestZipForExecutions(Collection $executions): string
+    {
+        $files = $executions
+            ->sortBy('id')
+            ->map(function (PayoutExecution $execution): array {
+                $path = $execution->prepared_payload_path;
+
+                if (! is_string($path) || $path === '' || ! Storage::disk('local')->exists($path)) {
+                    throw new UserFacingException(__('ui.messages.payout_manifest_download_failed'));
+                }
+
+                $contents = Storage::disk('local')->get($path);
+
+                if (! is_string($contents)) {
+                    throw new UserFacingException(__('ui.messages.payout_manifest_download_failed'));
+                }
+
+                return [
+                    'name' => $this->manifestDownloadName($execution),
+                    'contents' => $contents,
+                ];
+            })
+            ->values()
+            ->all();
+
+        if ($files === []) {
+            throw new UserFacingException(__('ui.messages.payout_manifest_download_failed'));
+        }
+
+        return $this->buildStoredZip($files);
+    }
+
     public function scriptPath(): string
     {
         return (string) config('payroll.confidential.poc_script');
@@ -257,6 +303,118 @@ class ConfidentialPayrollService
     private function importedReceiptPathForId(int $executionId): string
     {
         return trim((string) config('payroll.confidential.imported_receipt_dir'), '/')."/execution-{$executionId}-receipt.json";
+    }
+
+    /**
+     * @param  array<int, array{name: string, contents: string}>  $files
+     */
+    private function buildStoredZip(array $files): string
+    {
+        if (count($files) > 0xFFFF) {
+            throw new UserFacingException(__('ui.messages.payout_manifest_download_failed'));
+        }
+
+        $localFiles = '';
+        $centralDirectory = '';
+        $offset = 0;
+        [$dosTime, $dosDate] = $this->dosTimestamp(new DateTimeImmutable);
+
+        foreach ($files as $file) {
+            $name = $this->normalizeZipEntryName($file['name']);
+            $contents = $file['contents'];
+            $size = strlen($contents);
+
+            if ($size > 0xFFFFFFFF) {
+                throw new UserFacingException(__('ui.messages.payout_manifest_download_failed'));
+            }
+
+            $crc = (int) sprintf('%u', crc32($contents));
+            $nameLength = strlen($name);
+
+            $localHeader = pack(
+                'VvvvvvVVVvv',
+                0x04034B50,
+                20,
+                0,
+                0,
+                $dosTime,
+                $dosDate,
+                $crc,
+                $size,
+                $size,
+                $nameLength,
+                0,
+            );
+
+            $centralDirectory .= pack(
+                'VvvvvvvVVVvvvvvVV',
+                0x02014B50,
+                20,
+                20,
+                0,
+                0,
+                $dosTime,
+                $dosDate,
+                $crc,
+                $size,
+                $size,
+                $nameLength,
+                0,
+                0,
+                0,
+                0,
+                0,
+                $offset,
+            ).$name;
+
+            $localFiles .= $localHeader.$name.$contents;
+            $offset += strlen($localHeader) + $nameLength + $size;
+        }
+
+        $centralDirectorySize = strlen($centralDirectory);
+
+        return $localFiles
+            .$centralDirectory
+            .pack(
+                'VvvvvVVv',
+                0x06054B50,
+                0,
+                0,
+                count($files),
+                count($files),
+                $centralDirectorySize,
+                $offset,
+                0,
+            );
+    }
+
+    /**
+     * @return array{0:int,1:int}
+     */
+    private function dosTimestamp(DateTimeInterface $dateTime): array
+    {
+        $year = max(1980, min(2107, (int) $dateTime->format('Y')));
+        $month = (int) $dateTime->format('n');
+        $day = (int) $dateTime->format('j');
+        $hour = (int) $dateTime->format('G');
+        $minute = (int) $dateTime->format('i');
+        $second = intdiv((int) $dateTime->format('s'), 2);
+
+        return [
+            ($hour << 11) | ($minute << 5) | $second,
+            (($year - 1980) << 9) | ($month << 5) | $day,
+        ];
+    }
+
+    private function normalizeZipEntryName(string $name): string
+    {
+        $normalized = trim(str_replace('\\', '/', $name), '/');
+
+        if ($normalized === '' || str_contains($normalized, '../')) {
+            throw new InvalidArgumentException('Invalid zip entry name.');
+        }
+
+        return $normalized;
     }
 
     private function mintDecimals(): int
@@ -314,8 +472,9 @@ class ConfidentialPayrollService
             'instructions' => [
                 'summary' => 'Run the Anchor-side confidential-transfer signer outside Laravel, using an admin-controlled company signer.',
                 'example_command' => sprintf(
-                    'cd onchain && ASTER_PAYOUT_MANIFEST=/path/to/%s ASTER_COMPANY_OWNER_KEYPAIR=/absolute/path/to/admin-company-wallet.json yarn signer',
+                    'cd onchain && ASTER_PAYOUT_MANIFEST=/path/to/%s ASTER_CONFIDENTIAL_POC_OUTPUT=/path/to/execution-%d-receipt.json ASTER_COMPANY_OWNER_KEYPAIR=/absolute/path/to/admin-company-wallet.json yarn signer',
                     $this->manifestDownloadName($execution),
+                    $execution->id,
                 ),
             ],
         ];

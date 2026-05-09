@@ -13,17 +13,17 @@
         </div>
 
         <div class="table-shell">
-            <table class="min-w-full divide-y divide-white/10 text-left text-sm">
+            <table class="app-data-table text-left text-sm">
                 <thead class="bg-white/5 text-stone-400">
                     <tr>
                         <th class="px-5 py-4 font-medium">{{ __('ui.fields.employee') }}</th>
                         <th class="px-5 py-4 font-medium">{{ __('ui.fields.pay_cycle') }}</th>
                         <th class="px-5 py-4 font-medium">{{ __('ui.fields.wallet') }}</th>
                         <th class="px-5 py-4 font-medium">{{ __('ui.fields.contracts') }}</th>
-                        <th class="px-5 py-4 font-medium"></th>
+                        <th class="px-5 py-4 text-right font-medium">{{ __('ui.fields.actions') }}</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-white/10">
+                <tbody>
                     @forelse ($employees as $employee)
                         <tr class="align-top">
                             <td class="px-5 py-4">
@@ -35,8 +35,10 @@
                                 <p class="max-w-xs break-all font-mono text-xs text-stone-300">{{ $employee->wallet_address ?: __('ui.common.not_set_yet') }}</p>
                             </td>
                             <td class="px-5 py-4 text-stone-200">{{ $employee->contracts_count }}</td>
-                            <td class="px-5 py-4">
-                                <a href="{{ route('employees.show', $employee) }}" class="inline-link">{{ __('ui.actions.open') }}</a>
+                            <td class="px-5 py-4 text-right">
+                                <a href="{{ route('employees.show', $employee) }}" class="app-button app-button-secondary app-button-compact">
+                                    {{ __('ui.actions.open') }}
+                                </a>
                             </td>
                         </tr>
                     @empty

@@ -383,10 +383,6 @@ async function main() {
     workDir,
     "employee-owner-config.yml"
   );
-  const manifestDir = path.dirname(manifestPath);
-  const outputPath =
-    resolveUserPath(process.env.ASTER_CONFIDENTIAL_POC_OUTPUT) ||
-    path.join(manifestDir, "receipt.json");
   const manifest = readJsonFile(manifestPath);
   const mintDecimals = Number(
     manifest.payroll && manifest.payroll.mint_decimals !== undefined
@@ -406,6 +402,13 @@ async function main() {
   const payrollBatchId = Number(
     manifest.execution && manifest.execution.payroll_batch_id
   );
+  const manifestDir = path.dirname(manifestPath);
+  const receiptFileHint =
+    (manifest.artifacts && manifest.artifacts.receipt_file_hint) ||
+    `execution-${executionId}-receipt.json`;
+  const outputPath =
+    resolveUserPath(process.env.ASTER_CONFIDENTIAL_POC_OUTPUT) ||
+    path.join(manifestDir, receiptFileHint);
   const companyExpectedWallet =
     (manifest.company && manifest.company.wallet_address) || "";
   const companyName =

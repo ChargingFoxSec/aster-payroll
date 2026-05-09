@@ -9,6 +9,9 @@ services:
     volumes:
       - ..:/workspaces/frontiers-hackathon:cached
     command: sleep infinity
+    ports:
+      - "8000:8000"
+      - "5173:5173"
     depends_on:
       mysql:
         condition: service_healthy

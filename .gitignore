@@ -5,6 +5,7 @@ Thumbs.db
 .vscode/
 .zed/
 .fleet/
+.devcontainer/devcontainer-lock.json
 
 # Local env / secrets
 .env
@@ -17,6 +18,17 @@ auth.json
 # Logs / caches
 *.log
 .phpunit.result.cache
+backend/bootstrap/cache/*.php
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/storage/pail/*
+!backend/**/.gitignore
+
+# Local databases
+backend/database/*.sqlite
+backend/database/*.sqlite-*
 
 # Backend build and dependencies
 backend/vendor/
@@ -33,14 +45,31 @@ onchain/.yarn/
 
 # Local confidential-payroll demo artifacts
 onchain/.artifacts/
+onchain/.artifacts/**
 onchain/.confidential-ledger/
+backend/storage/app/private/payroll/
 
-# agent
+# Local video project / renders
+videos/
+
+# AI agent local state and prompts
+.codex/
 .agents/
 .claude/
+.cursor/
+.continue/
+.gemini/
+.windsurf/
+.aider*
+.roo/
+.kilocode/
 skills-lock.json
 AGENTS.md
 AGENTS.*.md
+CLAUDE.md
+CLAUDE.*.md
+GEMINI.md
+GEMINI.*.md
 docs/*
 !docs/
 !docs/**/*.md

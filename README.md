@@ -130,6 +130,18 @@ Key docs:
 
 The project is designed to run inside the existing devcontainer. The default backend environment expects MySQL at hostname `mysql`.
 
+Start the full local demo environment:
+
+```bash
+./scripts/start-demo-env.sh
+```
+
+Stop it without removing the validator container:
+
+```bash
+./scripts/stop-demo-env.sh
+```
+
 ### Backend
 
 ```bash
@@ -141,7 +153,6 @@ php artisan migrate --force
 php artisan db:seed --force
 npm install --ignore-scripts
 npm run build
-composer dev
 ```
 
 Open:

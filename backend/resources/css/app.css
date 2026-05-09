@@ -75,36 +75,13 @@ body.app-theme::before {
 }
 
 .brand-mark {
-    position: relative;
-    width: 3rem;
-    height: 3rem;
+    display: block;
+    width: 3.25rem;
+    height: 3.25rem;
     flex: 0 0 auto;
-    border: 3px solid var(--app-ink);
-    background: rgba(255, 255, 255, 0.52);
-    clip-path: polygon(24% 0, 100% 0, 100% 76%, 76% 100%, 0 100%, 0 24%);
-}
-
-.brand-mark::before,
-.brand-mark::after {
-    content: '';
-    position: absolute;
-    border: 2px solid var(--app-ink);
-    background: var(--app-cyan);
-}
-
-.brand-mark::before {
-    width: 0.72rem;
-    height: 0.72rem;
-    left: 0.45rem;
-    top: 0.92rem;
-    border-radius: 999px;
-}
-
-.brand-mark::after {
-    width: 0.86rem;
-    height: 0.86rem;
-    right: 0.32rem;
-    top: 0.56rem;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 10px 24px rgba(77, 85, 104, 0.12);
 }
 
 .brand-kicker,
@@ -305,6 +282,12 @@ body.app-theme::before {
     color: var(--app-ink);
 }
 
+.app-button-compact {
+    min-height: 2.25rem;
+    padding: 0.52rem 0.76rem;
+    font-size: 0.82rem;
+}
+
 .app-button:disabled,
 .app-button[disabled] {
     cursor: not-allowed;
@@ -350,6 +333,42 @@ body.app-theme::before {
     overflow-x: auto;
     overflow-y: hidden;
     background: rgba(255, 255, 255, 0.9);
+}
+
+.app-data-table {
+    width: 100%;
+    min-width: 48rem;
+    border-collapse: collapse;
+}
+
+.app-data-table tbody tr + tr {
+    border-top: 1px solid var(--app-border);
+}
+
+.payroll-ledger-grid {
+    display: grid;
+    width: 100%;
+    min-width: 48rem;
+    grid-template-columns: 1.25fr 0.75fr 0.75fr 0.75fr 0.55fr;
+    align-items: center;
+    gap: 1rem;
+}
+
+.payroll-ledger-row + .payroll-ledger-row {
+    border-top: 1px solid var(--app-border);
+}
+
+.payroll-batch-entry-grid {
+    display: grid;
+    width: 100%;
+    min-width: 58rem;
+    grid-template-columns: 1fr 0.75fr 0.75fr 1.25fr 0.55fr;
+    align-items: center;
+    gap: 1rem;
+}
+
+.payroll-batch-entry-row + .payroll-batch-entry-row {
+    border-top: 1px solid var(--app-border);
 }
 
 .table-shell > table,
@@ -456,6 +475,54 @@ body.app-theme::before {
     outline: none;
     border-color: var(--app-ink);
     box-shadow: 0 0 0 4px rgba(217, 208, 255, 0.55);
+}
+
+.batch-jump-menu {
+    width: 100%;
+}
+
+.batch-jump-trigger {
+    display: flex;
+    min-height: 3rem;
+    cursor: pointer;
+    list-style: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.batch-jump-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.batch-jump-caret {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.batch-jump-options {
+    max-height: 18rem;
+    overflow-y: auto;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.batch-jump-option {
+    display: block;
+    padding: 0.78rem 1rem;
+    color: var(--app-ink);
+    font-weight: 700;
+}
+
+.batch-jump-option + .batch-jump-option {
+    border-top: 1px solid var(--app-border);
+}
+
+.batch-jump-option:hover,
+.batch-jump-option-active {
+    background: var(--app-lilac);
 }
 
 .app-file-field::file-selector-button {

@@ -36,7 +36,12 @@
             <header class="app-header mb-8 px-4 py-3 lg:px-5">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <a href="{{ route('home') }}" class="flex items-center gap-4">
-                        <span class="brand-mark" aria-hidden="true"></span>
+                        <img
+                            src="{{ asset('aster-payroll-logo.svg') }}"
+                            alt=""
+                            class="brand-mark"
+                            aria-hidden="true"
+                        >
                         <span class="brand-wordmark">{{ __('ui.app_name') }}</span>
                     </a>
 

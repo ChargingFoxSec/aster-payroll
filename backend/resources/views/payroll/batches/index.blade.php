@@ -1,6 +1,6 @@
 <x-layouts.app :title="__('ui.pages.payroll.ledger_title')">
     <section class="space-y-6">
-        <div class="grid gap-6 lg:grid-cols-[1fr,0.9fr]">
+        <div class="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
             <div class="panel panel-hero p-6">
                 <p class="text-xs uppercase tracking-[0.35em] text-cyan-200/70">{{ __('ui.pages.payroll.ledger_kicker') }}</p>
                 <div class="mt-3">
@@ -80,16 +80,16 @@
             </div>
         </form>
 
-        <div class="table-shell">
-            <div class="grid grid-cols-[1.25fr,0.75fr,0.75fr,0.75fr,0.5fr] gap-4 border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
+        <div class="table-shell payroll-ledger-table">
+            <div class="payroll-ledger-grid payroll-ledger-header border-b border-white/10 px-6 py-4 text-xs uppercase tracking-[0.25em] text-stone-500">
                 <span>{{ __('ui.pages.payroll.batch') }}</span>
                 <span>{{ __('ui.fields.total') }}</span>
                 <span>{{ __('ui.fields.status') }}</span>
                 <span>{{ __('ui.common.due') }}</span>
-                <span></span>
+                <span class="text-right">{{ __('ui.fields.actions') }}</span>
             </div>
 
-            <div class="divide-y divide-white/10">
+            <div class="payroll-ledger-rows">
                 @forelse ($batches as $batch)
                     @php
                         $overdueCount = $batch->entries->filter(fn ($entry) => $entry->paid_at === null && $entry->due_date->isPast())->count();
@@ -97,7 +97,7 @@
                             fn ($entry) => $entry->payoutExecution?->status === \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL
                         )->count();
                     @endphp
-                    <article class="grid gap-4 px-6 py-5 lg:grid-cols-[1.25fr,0.75fr,0.75fr,0.75fr,0.5fr] lg:items-center">
+                    <article class="payroll-ledger-grid payroll-ledger-row px-6 py-5">
                         <div>
                             <p class="text-lg font-medium text-white">{{ $batch->period_year }}-{{ str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
                             <p class="mt-1 text-sm text-stone-400">{{ $batch->entries_count }} {{ __('ui.common.entries') }} · {{ optional($batch->executed_at)->toDateTimeString() ?: __('ui.common.not_executed_yet') }}</p>
@@ -113,7 +113,9 @@
                             @endif
                         </div>
                         <p class="text-sm text-stone-200">{{ $batch->due_date->toDateString() }}</p>
-                        <a href="{{ route('payroll-batches.show', $batch) }}" class="inline-link text-sm">{{ __('ui.actions.open') }}</a>
+                        <a href="{{ route('payroll-batches.show', $batch) }}" class="app-button app-button-secondary app-button-compact justify-self-end">
+                            {{ __('ui.actions.open') }}
+                        </a>
                     </article>
                 @empty
                     <div class="px-6 py-8 text-sm text-stone-400">
