@@ -29,6 +29,7 @@ backend/storage/pail/*
 # Local databases
 backend/database/*.sqlite
 backend/database/*.sqlite-*
+backups/
 
 # Backend build and dependencies
 backend/vendor/
@@ -51,6 +52,7 @@ backend/storage/app/private/payroll/
 
 # Local video project / renders
 videos/
+transcript.json
 
 # AI agent local state and prompts
 .codex/

@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\PayoutExecution;
+use App\Models\PayrollBatch;
+use App\Models\PayrollEntry;
 use App\Services\Payroll\ConfidentialPayrollService;
 use App\Services\Payroll\PayrollBatchDraftService;
 use App\Services\Payroll\PayrollReceiptImportService;
@@ -318,6 +321,76 @@ class AuthAndAuthorizationTest extends TestCase
             ->assertDontSee($otherEntry->proof->amount_commitment_hash)
             ->assertDontSee($otherEntry->proof->amount_nonce)
             ->assertDontSee('Proof Other User');
+    }
+
+    public function test_employee_payroll_page_separates_entry_payment_status_from_batch_finalization(): void
+    {
+        $company = $this->demoCompany();
+        $employee = $this->createEmployeeWithCompensation($company, [
+            'full_name' => 'Settlement Self User',
+            'email' => 'settlement-self@example.com',
+        ], 250000);
+        $this->createEmployeeWithCompensation($company, [
+            'full_name' => 'Settlement Other User',
+            'email' => 'settlement-other@example.com',
+        ], 310000);
+
+        $paidBatch = app(PayrollBatchDraftService::class)->createOrRefresh(
+            $company,
+            '2026-04',
+            '2026-04-30',
+        );
+        app(PayrollAnchoringService::class)->syncCommittedPayrollBatch($paidBatch);
+
+        $paidEntry = $paidBatch->fresh(['entries'])->entries->firstWhere('employee_id', $employee->id);
+        $this->assertNotNull($paidEntry);
+
+        $paidEntry->forceFill([
+            'status' => PayrollEntry::STATUS_PAID,
+            'paid_at' => '2026-04-20 10:00:00',
+            'tx_signature' => 'PartialPaidTransferSignature111111111111111111111111',
+        ])->save();
+        $paidBatch->forceFill([
+            'status' => PayrollBatch::STATUS_PARTIALLY_PAID,
+            'executed_at' => null,
+            'settlement_root' => null,
+            'finalized_by' => null,
+        ])->save();
+
+        $failedBatch = app(PayrollBatchDraftService::class)->createOrRefresh(
+            $company,
+            '2026-05',
+            '2026-05-31',
+        );
+        app(PayrollAnchoringService::class)->syncCommittedPayrollBatch($failedBatch);
+
+        $failedEntry = $failedBatch->fresh(['entries'])->entries->firstWhere('employee_id', $employee->id);
+        $this->assertNotNull($failedEntry);
+
+        PayoutExecution::query()->create([
+            'company_id' => $company->id,
+            'employee_id' => $employee->id,
+            'payroll_entry_id' => $failedEntry->id,
+            'approval_method' => PayoutExecution::APPROVAL_METHOD_LOCAL_SIGNER,
+            'status' => PayoutExecution::STATUS_FAILED,
+            'prepared_payload_path' => 'payroll/prepared-payouts/test-failed-entry.json',
+            'failure_reason' => 'Receipt missing confidential transfer signature.',
+        ]);
+
+        $this->actingAsEmployeeUser($employee, [
+            'email' => 'settlement-self@example.com',
+        ]);
+
+        $this->get(route('portal.payroll'))
+            ->assertOk()
+            ->assertSee('2026-04')
+            ->assertSee(__('ui.status.paid'))
+            ->assertSee('PartialPaidTransferSignature111111111111111111111111')
+            ->assertSee(__('ui.common.not_executed_yet'))
+            ->assertSee('2026-05')
+            ->assertSee(__('ui.status.failed'))
+            ->assertSee(__('ui.common.verified'))
+            ->assertDontSee('Settlement Other User');
     }
 
     public function test_employee_portal_uses_the_latest_effective_compensation_instead_of_a_future_amendment(): void

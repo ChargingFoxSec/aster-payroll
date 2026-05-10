@@ -53,6 +53,7 @@ class EmployeePortalController extends Controller
                     'payrollBatch.latestCommitAttestation',
                     'payrollBatch.latestApprovalAttestation',
                     'payrollBatch.latestFinalizationAttestation',
+                    'payoutExecution',
                     'proof',
                 ])
                 ->orderByDesc('due_date')

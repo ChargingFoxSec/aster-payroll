@@ -54,9 +54,9 @@
                     <h3 class="mt-2 text-xl font-semibold text-white">{{ __('ui.pages.employees.recent_entries') }}</h3>
                 </div>
 
-                <div class="divide-y divide-white/10">
+                <div>
                     @forelse ($employee->payrollEntries as $entry)
-                        <article class="px-6 py-5">
+                        <article class="portal-history-row px-6 py-5">
                             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
                                     <p class="text-lg font-medium text-white">

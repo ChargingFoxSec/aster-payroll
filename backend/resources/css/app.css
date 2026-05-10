@@ -358,6 +358,11 @@ body.app-theme::before {
     border-top: 1px solid var(--app-border);
 }
 
+.payroll-ledger-note-approval {
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
 .payroll-batch-entry-grid {
     display: grid;
     width: 100%;
@@ -368,6 +373,15 @@ body.app-theme::before {
 }
 
 .payroll-batch-entry-row + .payroll-batch-entry-row {
+    border-top: 1px solid var(--app-border);
+}
+
+.portal-history-row {
+    width: 100%;
+    min-width: 48rem;
+}
+
+.portal-history-row + .portal-history-row {
     border-top: 1px solid var(--app-border);
 }
 

@@ -26,11 +26,24 @@
 
             <div class="divide-y divide-white/10">
                 @forelse ($employee->payrollEntries as $entry)
-                    @php($displayStatus = $entry->paid_at ? 'paid' : ($entry->due_date->isPast() ? 'overdue' : $entry->status))
+                    @php
+                        $batch = $entry->payrollBatch;
+                        $executionStatus = $entry->payoutExecution?->status;
+                        $displayStatus = match (true) {
+                            $entry->paid_at !== null => \App\Models\PayrollEntry::STATUS_PAID,
+                            $executionStatus === \App\Models\PayoutExecution::STATUS_FAILED => \App\Models\PayoutExecution::STATUS_FAILED,
+                            $executionStatus === \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL => \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL,
+                            $entry->due_date->isPast() => \App\Models\PayrollEntry::STATUS_OVERDUE,
+                            default => $entry->status,
+                        };
+                        $unfinalizedBatchText = $batch->status === \App\Models\PayrollBatch::STATUS_EXECUTED
+                            ? __('ui.common.pending_executed_attestation')
+                            : __('ui.common.not_executed_yet');
+                    @endphp
                     <article class="space-y-4 px-6 py-5">
                         <div class="grid gap-4 lg:grid-cols-[0.85fr_0.85fr_0.75fr_1.55fr] lg:items-center">
                             <div>
-                                <p class="text-lg font-medium text-white">{{ $entry->payrollBatch->period_year }}-{{ str_pad((string) $entry->payrollBatch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
+                                <p class="text-lg font-medium text-white">{{ $batch->period_year }}-{{ str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
                                 <p class="mt-1 text-sm text-stone-400">{{ __('ui.common.due') }} {{ $entry->due_date->toDateString() }}</p>
                             </div>
                             <p class="text-lg font-semibold text-white">{{ number_format($entry->amount_minor / 100, 2) }} {{ $entry->currency }}</p>
@@ -69,31 +82,31 @@
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.entries_root') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->entries_root ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->entries_root ?: __('ui.common.pending') }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.batch_account') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->anchor_batch_pubkey ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->anchor_batch_pubkey ?: __('ui.common.pending') }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.approval_root') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->approval_root ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->approval_root ?: __('ui.common.pending') }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.settlement_root') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->settlement_root ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->settlement_root ?: $unfinalizedBatchText }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.batch_commit_tx') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.batch_finalization_tx') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->latestFinalizationAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->latestFinalizationAttestation?->tx_signature ?: $unfinalizedBatchText }}</p>
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.finalized_by') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $entry->payrollBatch->finalized_by ?: __('ui.common.pending') }}</p>
+                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->finalized_by ?: $unfinalizedBatchText }}</p>
                                     </div>
                                 </div>
                             </div>

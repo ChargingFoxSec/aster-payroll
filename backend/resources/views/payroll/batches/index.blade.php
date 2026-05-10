@@ -109,7 +109,7 @@
                                 <p class="mt-2 text-xs text-amber-200">{{ __('ui.pages.payroll.overdue_entries', ['count' => $overdueCount]) }}</p>
                             @endif
                             @if ($awaitingApprovalCount > 0)
-                                <p class="mt-2 text-xs text-sky-200">{{ __('ui.pages.payroll.awaiting_signer', ['count' => $awaitingApprovalCount]) }}</p>
+                                <p class="payroll-ledger-note-approval mt-2 text-xs">{{ __('ui.pages.payroll.awaiting_signer', ['count' => $awaitingApprovalCount]) }}</p>
                             @endif
                         </div>
                         <p class="text-sm text-stone-200">{{ $batch->due_date->toDateString() }}</p>
