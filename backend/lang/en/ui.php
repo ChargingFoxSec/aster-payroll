@@ -46,6 +46,7 @@ return [
         'open_batch_settlement_lab' => 'Open batch payroll settlement',
         'open_confidential_payroll_demo' => 'Payroll Settlement',
         'open_confidential_settlement' => 'Open payroll settlement',
+        'open_in_solana_explorer' => 'Open in Solana Explorer',
         'open_my_payroll_history' => 'Open my payroll history',
         'open_payroll_statement' => 'Open payroll statement',
         'prepare_manifests' => 'Prepare and download payout ZIP',

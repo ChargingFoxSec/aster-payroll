@@ -41,6 +41,9 @@ class PayrollBatchController extends Controller
                 'entries.employee:id,full_name,email',
                 'entries.payoutExecution:id,payroll_entry_id,status,tx_signature',
                 'attestations:id,payroll_batch_id,tx_signature,payload_hash',
+                'latestCommitAttestation',
+                'latestApprovalAttestation',
+                'latestFinalizationAttestation',
             ]);
 
         if (preg_match('/^\d{4}-\d{2}$/', $filters['period']) === 1) {

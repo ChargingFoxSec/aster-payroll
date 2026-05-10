@@ -39,6 +39,7 @@
                         $unfinalizedBatchText = $batch->status === \App\Models\PayrollBatch::STATUS_EXECUTED
                             ? __('ui.common.pending_executed_attestation')
                             : __('ui.common.not_executed_yet');
+                        $entryTxSignature = $entry->tx_signature ?: $entry->payoutExecution?->tx_signature;
                     @endphp
                     <article class="space-y-4 px-6 py-5">
                         <div class="grid gap-4 lg:grid-cols-[0.85fr_0.85fr_0.75fr_1.55fr] lg:items-center">
@@ -53,7 +54,13 @@
                                     <p class="mt-2 text-xs text-stone-400">{{ __('ui.status.paid') }} {{ $entry->paid_at->toDateTimeString() }}</p>
                                 @endif
                             </div>
-                            <p class="break-all font-mono text-xs {{ $entry->tx_signature ? 'text-cyan-100' : 'text-stone-500' }}">{{ $entry->tx_signature ?: __('ui.common.not_set_yet') }}</p>
+                            <div>
+                                @if ($entryTxSignature)
+                                    <x-solana-tx-link :signature="$entryTxSignature" link-class="block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                                @else
+                                    <p class="break-all font-mono text-xs text-stone-500">{{ __('ui.common.not_set_yet') }}</p>
+                                @endif
+                            </div>
                         </div>
 
                         @if ($entry->proof)
@@ -98,11 +105,19 @@
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.batch_commit_tx') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                                        @if ($batch->latestCommitAttestation?->tx_signature)
+                                            <x-solana-tx-link :signature="$batch->latestCommitAttestation->tx_signature" link-class="mt-1 block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                                        @else
+                                            <p class="mt-1 break-all font-mono text-stone-100">{{ __('ui.common.pending') }}</p>
+                                        @endif
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.batch_finalization_tx') }}</p>
-                                        <p class="mt-1 break-all font-mono text-stone-100">{{ $batch->latestFinalizationAttestation?->tx_signature ?: $unfinalizedBatchText }}</p>
+                                        @if ($batch->latestFinalizationAttestation?->tx_signature)
+                                            <x-solana-tx-link :signature="$batch->latestFinalizationAttestation->tx_signature" link-class="mt-1 block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                                        @else
+                                            <p class="mt-1 break-all font-mono text-stone-100">{{ $unfinalizedBatchText }}</p>
+                                        @endif
                                     </div>
                                     <div>
                                         <p>{{ __('ui.fields.finalized_by') }}</p>

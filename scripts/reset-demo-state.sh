@@ -118,7 +118,7 @@ backup_demo_state() {
 
     echo "Backing up MySQL database to ${backup_dir}/aster_payroll.sql..."
     docker exec -e MYSQL_PWD="${DB_PASSWORD}" "${MYSQL_CONTAINER}" \
-        mysqldump "-u${DB_USER}" "${DB_NAME}" > "${backup_dir}/aster_payroll.sql"
+        mysqldump --no-tablespaces "-u${DB_USER}" "${DB_NAME}" > "${backup_dir}/aster_payroll.sql"
 
     if [[ -d "${payroll_storage_dir}" ]]; then
         echo "Archiving payroll storage to ${backup_dir}/payroll-storage.tgz..."

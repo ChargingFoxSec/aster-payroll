@@ -96,11 +96,25 @@
                         $awaitingApprovalCount = $batch->entries->filter(
                             fn ($entry) => $entry->payoutExecution?->status === \App\Models\PayoutExecution::STATUS_AWAITING_APPROVAL
                         )->count();
+                        $latestEntryTxSignature = $batch->entries
+                            ->map(fn ($entry) => $entry->payoutExecution?->tx_signature ?: $entry->tx_signature)
+                            ->first(fn ($signature) => filled($signature));
+                        $latestTxSignature = $batch->latestFinalizationAttestation?->tx_signature
+                            ?? $batch->latestApprovalAttestation?->tx_signature
+                            ?? $batch->latestCommitAttestation?->tx_signature
+                            ?? $latestEntryTxSignature;
                     @endphp
                     <article class="payroll-ledger-grid payroll-ledger-row px-6 py-5">
                         <div>
                             <p class="text-lg font-medium text-white">{{ $batch->period_year }}-{{ str_pad((string) $batch->period_month, 2, '0', STR_PAD_LEFT) }}</p>
                             <p class="mt-1 text-sm text-stone-400">{{ $batch->entries_count }} {{ __('ui.common.entries') }} · {{ optional($batch->executed_at)->toDateTimeString() ?: __('ui.common.not_executed_yet') }}</p>
+                            @if ($latestTxSignature)
+                                <p class="mt-2">
+                                    <x-solana-tx-link :signature="$latestTxSignature" link-class="inline-block max-w-full break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50">
+                                        {{ __('ui.fields.tx_signature') }} {{ \Illuminate\Support\Str::limit($latestTxSignature, 18) }}
+                                    </x-solana-tx-link>
+                                </p>
+                            @endif
                         </div>
                         <p class="text-lg font-semibold text-white">{{ number_format($batch->total_amount_minor / 100, 2) }} {{ $batch->currency }}</p>
                         <div>

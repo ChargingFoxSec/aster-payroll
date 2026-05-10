@@ -63,17 +63,29 @@
                 <p class="mt-4">{{ __('ui.fields.entries_root') }}</p>
                 <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->entries_root ?: __('ui.common.pending') }}</p>
                 <p class="mt-4">{{ __('ui.fields.batch_commit_tx') }}</p>
-                <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->latestCommitAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                @if ($payrollBatch->latestCommitAttestation?->tx_signature)
+                    <x-solana-tx-link :signature="$payrollBatch->latestCommitAttestation->tx_signature" link-class="mt-1 block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                @else
+                    <p class="mt-1 break-all font-mono text-xs text-stone-300">{{ __('ui.common.pending') }}</p>
+                @endif
                 <p class="mt-4">{{ __('ui.fields.approval_root') }}</p>
                 <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->approval_root ?: __('ui.common.pending') }}</p>
                 <p class="mt-4">{{ __('ui.fields.batch_approval_tx') }}</p>
-                <p class="mt-1 break-all font-mono text-xs {{ $payrollBatch->latestApprovalAttestation ? 'text-cyan-100' : 'text-stone-300' }}">{{ $payrollBatch->latestApprovalAttestation?->tx_signature ?: __('ui.common.pending') }}</p>
+                @if ($payrollBatch->latestApprovalAttestation?->tx_signature)
+                    <x-solana-tx-link :signature="$payrollBatch->latestApprovalAttestation->tx_signature" link-class="mt-1 block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                @else
+                    <p class="mt-1 break-all font-mono text-xs text-stone-300">{{ __('ui.common.pending') }}</p>
+                @endif
                 <p class="mt-4">{{ __('ui.fields.settlement_root') }}</p>
                 <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->settlement_root ?: ($payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}</p>
                 <p class="mt-4">{{ __('ui.fields.batch_finalization_tx') }}</p>
-                <p class="mt-1 break-all font-mono text-xs {{ $payrollBatch->latestFinalizationAttestation ? 'text-cyan-100' : 'text-stone-300' }}">
-                    {{ $payrollBatch->latestFinalizationAttestation?->tx_signature ?: ($payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet')) }}
-                </p>
+                @if ($payrollBatch->latestFinalizationAttestation?->tx_signature)
+                    <x-solana-tx-link :signature="$payrollBatch->latestFinalizationAttestation->tx_signature" link-class="mt-1 block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                @else
+                    <p class="mt-1 break-all font-mono text-xs text-stone-300">
+                        {{ $payrollBatch->status === \App\Models\PayrollBatch::STATUS_EXECUTED ? __('ui.common.pending_executed_attestation') : __('ui.common.not_executed_yet') }}
+                    </p>
+                @endif
                 <p class="mt-4">{{ __('ui.fields.finalized_by') }}</p>
                 <p class="mt-1 break-all font-mono text-xs text-stone-100">{{ $payrollBatch->finalized_by ?: __('ui.common.pending') }}</p>
             </div>
@@ -90,6 +102,7 @@
 
             <div>
                 @foreach ($payrollBatch->entries as $entry)
+                    @php($entryTxSignature = $entry->tx_signature ?: $entry->payoutExecution?->tx_signature)
                     <article class="payroll-batch-entry-grid payroll-batch-entry-row px-6 py-5">
                         <div>
                             <p class="text-lg font-medium text-white">{{ $entry->employee->full_name }}</p>
@@ -110,7 +123,13 @@
                                 <p class="mt-2 text-xs text-stone-400">{{ __('ui.fields.comp_effective') }} {{ $entry->compensationAmendment->effective_date->toDateString() }}</p>
                             @endif
                         </div>
-                        <p class="break-all font-mono text-xs {{ $entry->tx_signature ? 'text-cyan-100' : 'text-stone-500' }}">{{ $entry->tx_signature ?: __('ui.common.not_set_yet') }}</p>
+                        <div>
+                            @if ($entryTxSignature)
+                                <x-solana-tx-link :signature="$entryTxSignature" link-class="block break-all font-mono text-xs text-cyan-100 underline underline-offset-4 hover:text-cyan-50" />
+                            @else
+                                <p class="break-all font-mono text-xs text-stone-500">{{ __('ui.common.not_set_yet') }}</p>
+                            @endif
+                        </div>
                         <a href="{{ route('employees.payroll.show', $entry->employee) }}" class="app-button app-button-secondary app-button-compact justify-self-end">
                             {{ __('ui.actions.statement') }}
                         </a>

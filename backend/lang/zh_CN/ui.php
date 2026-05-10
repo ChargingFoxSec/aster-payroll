@@ -46,6 +46,7 @@ return [
         'open_batch_settlement_lab' => '进入批次薪资结算',
         'open_confidential_payroll_demo' => '薪资结算',
         'open_confidential_settlement' => '打开薪资结算',
+        'open_in_solana_explorer' => '在 Solana Explorer 打开',
         'open_my_payroll_history' => '查看我的薪资记录',
         'open_payroll_statement' => '查看薪资明细',
         'prepare_manifests' => '准备并下载付款说明 ZIP',

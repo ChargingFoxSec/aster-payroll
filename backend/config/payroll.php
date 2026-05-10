@@ -34,4 +34,9 @@ return [
         'timeout_seconds' => (int) env('ASTER_CONFIDENTIAL_TIMEOUT_SECONDS', 300),
         'rpc_timeout_seconds' => (int) env('ASTER_CONFIDENTIAL_RPC_TIMEOUT_SECONDS', 10),
     ],
+
+    'explorer' => [
+        'url' => env('ASTER_SOLANA_EXPLORER_URL', 'https://explorer.solana.com'),
+        'browser_rpc_url' => env('ASTER_SOLANA_EXPLORER_RPC_URL', 'http://localhost:8899/'),
+    ],
 ];
