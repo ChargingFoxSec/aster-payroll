@@ -112,19 +112,8 @@ It does not store plaintext salaries, raw contract documents, raw receipts, or p
 ```text
 backend/   Laravel app, Blade UI, models, controllers, services, migrations, feature tests
 onchain/   Anchor program, TypeScript tests, local signer, payroll attestation scripts
-docs/      Product spec, decisions, runbook, submission draft, demo/pitch materials
 scripts/   Local validator and Token-2022 helper scripts
 ```
-
-Key docs:
-
-- `docs/v1-spec.md`: product and technical scope
-- `docs/decisions.md`: fixed implementation decisions
-- `docs/project-todo.md`: the single implementation backlog
-- `docs/demo-runbook.md`: local demo runbook
-- `docs/demo-video-script.md`: short video recording script
-- `docs/pitch-deck-outline.md`: pitch deck source outline
-- `docs/hackathon-submission.md`: copy-ready Colosseum form draft
 
 ## Quick Start
 
@@ -203,8 +192,6 @@ php artisan payroll:demo-health
 ```
 
 ## Demo Walkthrough
-
-Use `docs/demo-runbook.md` for the full operator flow. The short version is:
 
 1. Start the Laravel app and confidential validator.
 2. Log in as `admin@aster.test`.

@@ -53,6 +53,7 @@ backend/storage/app/private/payroll/
 # Local video project / renders
 videos/
 transcript.json
+docs/
 
 # AI agent local state and prompts
 .codex/
@@ -72,6 +73,3 @@ CLAUDE.md
 CLAUDE.*.md
 GEMINI.md
 GEMINI.*.md
-docs/*
-!docs/
-!docs/**/*.md
